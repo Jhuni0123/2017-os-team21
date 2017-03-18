@@ -3,6 +3,7 @@
  */
 
 #include <linux/syscalls.h>
+#include <linux/prinfo.h>
 
 int do_ptree(struct prinfo *buf, int *nr)
 {
