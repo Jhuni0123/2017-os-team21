@@ -696,10 +696,6 @@ __SYSCALL(__NR_finit_module, sys_finit_module)
 #undef __NR_syscalls
 #define __NR_syscalls 274
 
-#define __NR_ptree 380
-__SYSCALL(__NR_ptree, sys_ptree)
-
-
 /*
  * All syscalls below here should go away really,
  * these are provided for both review and as a porting
