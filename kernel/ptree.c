@@ -1,5 +1,5 @@
 /*
- *  linux/fs/ptree.c
+ * linux/kernel/ptree.c 
  */
 
 #include <linux/syscalls.h>
