@@ -5,7 +5,6 @@
 #include <string.h>
 #include "prinfo.h"
 
-extern int test();
 
 extern int test();
 
