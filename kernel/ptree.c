@@ -8,17 +8,26 @@
 #include <linux/errno.h>
 #include <linux/slab.h>
 #include <linux/list.h>
-#include <linux/uaccess.h>
-#include <linux/string.h>
+//#include <linux/uaccess.h>
+#include <linux/kernel.h>
+
+
+inline struct task_struct* first_child_task(struct task_struct *task){
+    return list_first_entry(&task->children, struct task_struct, sibling);
+}
+
+inline struct task_struct* next_sibling_task(struct task_struct *task){
+    return list_first_entry(&task->sibling, struct task_struct, sibling);
+}
 
 inline pid_t child_pid(struct task_struct *task){
-    struct list_head *children_list = &(task->children);
-    if (list_empty(children_list))return 0;
-    else return list_first_entry(children_list, struct task_struct, sibling)->pid;
+    if(list_empty(&task->children))return 0;
+    else return first_child_task(task)->pid;
 }
 
 inline pid_t sibling_pid(struct task_struct *task){
-    return list_first_entry(&(task->sibling), struct task_struct, sibling)->pid;
+    if(list_is_last(&task->sibling, &task->real_parent->children))return 0;
+    return next_sibling_task(task)->pid;
 }
 
 void print_prinfo(struct task_struct *task){
@@ -31,173 +40,91 @@ void print_prinfo(struct task_struct *task){
     printk("DEBUG: comm:   %s\n", task->comm);
 }
 
+// only use after validate memory access
+void __write_prinfo(struct prinfo *info, struct task_struct *task){
+    info->state = task->state;
+    info->pid = task->pid;
+    info->parent_pid = task->real_parent->pid;
+    info->first_child_pid = child_pid(task);
+    info->next_sibling_pid = sibling_pid(task);
+    info->uid = (long)(task->real_cred->uid);
+    strncpy(info->comm, task->comm, TASK_COMM_LEN);
+}
+
+void dfs_task_rec(struct task_struct *task){
+    struct task_struct *child;
+    struct list_head *head = &task->children;
+    list_for_each_entry(child, head, sibling){
+        // do something
+        printk("DEBUG: pid: %d\n", child->pid);
+        dfs_task_rec(child);
+    }
+}
+
+void dfs_task(struct task_struct *init){
+    struct task_struct *task = init;
+    while(true){
+        if(list_empty(&task->children)){
+            while(task != init && list_is_last(&task->sibling, &task->real_parent->children)){
+                task = task->real_parent;
+            }
+            if(task == init)break;
+            task = next_sibling_task(task);
+        }
+        else {
+            task = first_child_task(task);
+        }
+        // do something
+        printk("DEBUG: pid: %d\n", task->pid);
+    }
+}
+
 int do_ptree(struct prinfo *buf, int *nr)
 {
-	printk("DEBUG: ptree is called\n");
+    printk("DEBUG: ptree is called\n");
 
+    if(buf == NULL || nr == NULL){
+        printk("DEBUG: ERROR: buf or nr is null pointer \n");
+        return -EINVAL;
+    }
+/*
+    int buflen = ARRAY_SIZE(buf);
+
+    if(!access_ok(int *, nr, 1) || !access_ok(struct prinfo *, buf, buflen)){
+        printk("DEBUG: nr or buf is not accessable\n");
+        return -EFAULT;
+    }
+
+    struct prinfo *kbuf = (struct prinfo *) kmalloc(sizeof(struct prinfo) * buflen, GFP_ATOMIC);
+    if(kbuf == NULL){
+        printk("DEBUG: kmalloc failure for kBuf");
+        //todo: errno 
+        return -1;
+    }
+*/
     printk("DEBUG: lock tasklist\n");
     read_lock(&tasklist_lock);
 
-    printk("DEBUG: ==INIT TASK==\n");
-    print_prinfo(&init_task);
-
-    printk("DEBUG: ==TASK PID 1==\n");
-    struct task_struct *task_pid1 = find_task_by_vpid(1);
-    print_prinfo(task_pid1);
-
-    printk("DEBUG: ==TASK CHILD OF PID 1==\n");
-    print_prinfo(find_task_by_vpid(child_pid(task_pid1)));
-
-    printk("DEBUG: ==TASK PID 2==\n");
-    print_prinfo(find_task_by_vpid(2));
+    dfs_task(&init_task);
 
     printk("DEBUG: unlock tasklist\n");
-
     read_unlock(&tasklist_lock);
 
+    /* copy kBuf into buf */
+    /*
+    if(copy_to_user((char *)buf, (char *)kBuf, num*sizeof(struct task_struct))==0)
+    {
+        printk("DEBUG: copy_to_user to buf failure\n");
+        return -EFAULT;
+    }
+    */
 
-
-	/* copy content of nr from user space */
-	int num;
-	copy_from_user(&num, nr, sizeof(int));
-
-	/* error checking */
-	/* check if buf and nr are null pointers */
-	if(buf == NULL || nr == NULL || num < 0)
-	{
-		printk("DEBUG: null pointer error\n");
-		return -EINVAL;
-	}
-	/* check if buf is not in right address space */
-	if(!access_ok(struct prinfo *, buf, num))
-	{
-		printk("DEBUG: buf address space error\n");
-		return -EFAULT;
-	}
-
-	/* assign memory to save things to write on buf */
-	struct prinfo *kBuf = (struct prinfo *) kmalloc(sizeof(struct prinfo) * num, GFP_ATOMIC);
-	if(kBuf == NULL)
-	{
-		printk("DEBUG: kmalloc failure for kBuf");
-		//todo: errno 
-		return -1;
-	}
-	int nextBIndex = 0; 
-
-	/* define a stack for dfs */
-	int MAX_ENTRY = 10000; // arbitrary number todo: optimization
-	struct task_struct **dfsStack = kmalloc(sizeof(struct task_struct *) * MAX_ENTRY, GFP_ATOMIC) ; 
-	if(dfsStack == NULL)
-	{
-		printk("DEBUG: kmalloc failure fore stack");
-		//todo: errno
-		return -1;
-	}
-	int nextSIndex = 0;
-
-	/* does not need to check for visited 
-	   since it's a rooted tree and
-	   it never comes back to a visited node */
-
-	/* lock tasklist */
-	printk("DEBUG: lock tasklist\n");
-	read_lock(&tasklist_lock);
-
-	/* get root process, that is init */
-	struct task_struct *root = kmalloc(sizeof(struct task_struct), GFP_ATOMIC);
-	if(root == NULL)
-	{
-		printk("DEBUG: kmalloc failure for root");
-		//todo: errno
-		return -1;
-	}
-
-	root = &init_task;
-	
-	printk("DEBUG: got init_task with pid %ld\n", root->pid);
-	dfsStack[nextSIndex++] = root; // push it to stack. kBuf will be handled inside while loop
-
-	/* define and initiate return result */
-	int proc_num = 0;
-
-	/* run dfs */
-	while(nextSIndex > 0 )
-	{
-		/* pop stack */
-		struct task_struct *curr = kmalloc(sizeof(struct task_struct), GFP_ATOMIC);
-		curr = (dfsStack[--nextSIndex]);
-		
-
-		/* save info to kBuf if kBuf index < nr */
-		if(nextBIndex < num)
-		{
-			struct prinfo new;
-			new.state = curr->state;
-			new.pid = curr->pid;
-			new.parent_pid = curr->real_parent->pid;
-			new.first_child_pid = child_pid(curr);
-			new.next_sibling_pid = sibling_pid(curr);
-			new.uid = (long) curr->real_cred->uid;
-			strncpy(new.comm, curr->comm, 64);
-			kBuf[nextBIndex++] = new;
-		}
-		/* increment process num */
-		proc_num++;
-		
-		/* put sibling to the stack */
-		if(!list_empty(&(curr->sibling)))
-		//if(sibling->pid != curr->pid) // assuming circularly linked list
-		{
-			struct task_struct *sibling = kmalloc(sizeof(struct task_struct), GFP_ATOMIC);
-			sibling = list_first_entry(&(curr->sibling), struct task_struct, sibling);
-			/*			
-			if((nextSIndex<500) && (sibling->pid != 0))
-			{
-				dfsStack[nextSIndex++] = sibling;
-			}
-			*/
-			
-		}	
-
-		/* put children to the stack */
-		if(!list_empty(&(curr->children)))
-		{
-			struct task_struct *child = kmalloc(sizeof(struct task_struct), GFP_ATOMIC);
-			child = list_first_entry(&(curr->children), struct task_struct, sibling);
-			dfsStack[nextSIndex++] = child;
-		}
-
-	}
-
-	/* unlock tasklist */
-	printk("DEBUG: unlock tasklist\n");
-	read_unlock(&tasklist_lock);
-
-	/* copy kBuf into buf */
-	/*
-	if(copy_to_user((char *)buf, (char *)kBuf, num*sizeof(struct task_struct))==0)
-	{
-		printk("DEBUG: copy_to_user to buf failure\n");
-		return -EFAULT;
-	}
-	*/
-
-	/* free all malloced things */
-	kfree(kBuf);
-	kfree(dfsStack);
-	kfree(root);
-	//todo: what to do with curr's, child's and sibling's?
-
-	/* end */
-
-
+//    kfree(kbuf);
 
     printk("DEBUG: end of ptree\n");
-	return 0;
+    return 0;
 }
 
-SYSCALL_DEFINE2(ptree, struct prinfo*, buf, int*, nr)
-{
-	return do_ptree(buf, nr);
+SYSCALL_DEFINE2(ptree, struct prinfo*, buf, int*, nr){
+    return do_ptree(buf, nr);
 }
