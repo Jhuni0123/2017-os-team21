@@ -7,6 +7,8 @@
 
 extern int test();
 
+extern int test();
+
 int main()
 {
 	int nr = 500;
