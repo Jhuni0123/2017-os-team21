@@ -8,7 +8,7 @@
 #include <linux/errno.h>
 #include <linux/slab.h>
 #include <linux/list.h>
-//#include <linux/uaccess.h>
+#include <linux/uaccess.h>
 #include <linux/kernel.h>
 
 
@@ -61,7 +61,9 @@ void dfs_task_rec(struct task_struct *task){
     }
 }
 
-void dfs_task(struct task_struct *init){
+int dfs_task(struct task_struct *init, struct prinfo *buf, int buflen, int *nr){
+    int copied = 0;
+    int count = 0;
     struct task_struct *task = init;
     while(true){
         if(list_empty(&task->children)){
@@ -76,7 +78,14 @@ void dfs_task(struct task_struct *init){
         }
         // do something
         printk("DEBUG: pid: %d\n", task->pid);
+        if(copied < buflen){
+            __write_prinfo(buf + copied, task);
+            copied++;
+        }
+        count++;
     }
+    (*nr) = copied;
+    return count;
 }
 
 int do_ptree(struct prinfo *buf, int *nr)
@@ -87,42 +96,47 @@ int do_ptree(struct prinfo *buf, int *nr)
         printk("DEBUG: ERROR: buf or nr is null pointer \n");
         return -EINVAL;
     }
-/*
-    int buflen = ARRAY_SIZE(buf);
 
-    if(!access_ok(int *, nr, 1) || !access_ok(struct prinfo *, buf, buflen)){
-        printk("DEBUG: nr or buf is not accessable\n");
+    if(!access_ok(int *, nr, 1)){
         return -EFAULT;
     }
 
+    int buflen;
+    int knr;
+    int total;
+
+    buflen = *nr;
+
+    if(buflen < 0){
+        return -EINVAL;
+    }
+
     struct prinfo *kbuf = (struct prinfo *) kmalloc(sizeof(struct prinfo) * buflen, GFP_ATOMIC);
+
     if(kbuf == NULL){
-        printk("DEBUG: kmalloc failure for kBuf");
+        printk("DEBUG: kmalloc failure for kbuf");
         //todo: errno 
         return -1;
     }
-*/
+
     printk("DEBUG: lock tasklist\n");
     read_lock(&tasklist_lock);
 
-    dfs_task(&init_task);
+    total = dfs_task(&init_task, kbuf, buflen, &knr);
 
     printk("DEBUG: unlock tasklist\n");
     read_unlock(&tasklist_lock);
 
-    /* copy kBuf into buf */
-    /*
-    if(copy_to_user((char *)buf, (char *)kBuf, num*sizeof(struct task_struct))==0)
-    {
+    if(copy_to_user(buf, kbuf, sizeof(struct prinfo) * buflen)){
         printk("DEBUG: copy_to_user to buf failure\n");
         return -EFAULT;
     }
-    */
-
-//    kfree(kbuf);
+    
+    *nr = knr;
+    kfree(kbuf);
 
     printk("DEBUG: end of ptree\n");
-    return 0;
+    return total;
 }
 
 SYSCALL_DEFINE2(ptree, struct prinfo*, buf, int*, nr){
