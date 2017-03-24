@@ -1,4 +1,4 @@
 OUTPUTNAME="test"
 
-make: main.c
+make: main.c test.c
 	arm-linux-gnueabi-gcc $? -o $(OUTPUTNAME)
