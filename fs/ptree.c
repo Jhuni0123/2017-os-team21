@@ -21,13 +21,13 @@ inline pid_t sibling_pid(struct task_struct *task)
 	return list_first_entry(&(task->sibling), struct task_struct, sibling)->pid;
 }
 
-void print_prinfo(strucr=t  task_struct *task){
+void print_prinfo(struct  task_struct *task){
 	printk("DEBUG: state : %ld\n", task->state);
 	printk("DEBUG: pid:    %d\n", task->pid);
-	printk("DEBUG: parent: %d\n", task->read_parent->pid);
+	printk("DEBUG: parent: %d\n", task->real_parent->pid);
 	printk("DEBUG: child:  %d\n", child_pid(task));
 	printk("DEBUG: sibling:%d\n", sibling_pid(task));
-	printk("DEBUG: uid:    %ld\n", (ong)task->real_cred->uid);
+	printk("DEBUG: uid:    %ld\n", (long)task->real_cred->uid);
 	printk("DEBUG: comm:   %s\n", task->comm);
 }
 
@@ -37,22 +37,20 @@ int do_ptree(struct prinfo *buf, int *nr)
 	
 	/* error checking */
 	/* check if buf and nr are null pointers */
-	if(buf==null || nr == null || *nr < 0)
+	if(buf==NULL || nr == NULL || *nr < 0)
 	{
-		printk("null pointer error\n");
-		errno = EINVAL;
-		return -1;
+		printk("DEBUG: null pointer error\n");
+		return -EINVAL;
 	}
-	/* check if buf size and nr do not match */
-	if(1)//todo: how to check
+	/* check if buf is not in right address space */
+	if(1)//!access_ok(struct prinfo *, buf, *nr))
 	{
-		printk("buf size error\n");
-		errno = EFAULT;
-		return -1;
+		printk("DEBUG: buf address space error\n");
+		return -EFAULT;
 	}
 
 	/* assign memory to save things to write on buf */
-	struct prinfo *kBuf = (prinfo *)  kmalloc(sizeof(struct prinfo) * (*nr), GFP_ATOMIC);
+	struct prinfo *kBuf = (struct prinfo *)  kmalloc(sizeof(struct prinfo) * (*nr), GFP_ATOMIC);
 	if(kBuf == NULL)
 	{
 		printk("DEBUG: kmalloc failure for kBuf");
@@ -63,8 +61,8 @@ int do_ptree(struct prinfo *buf, int *nr)
 
 	/* define a stack for dfs */
 	int MAX_ENTRY = 100; // arbitrary number todo: optimization
-	struct task_struct *stack = kmalloc(sizeof(task_struct *)*MAX_ENTRY, GFP_ATOMIC) ; 
-	if(stack == NULL)
+	struct task_struct **dfsStack = kmalloc(sizeof(struct task_struct *)*MAX_ENTRY, GFP_ATOMIC) ; 
+	if(dfsStack == NULL)
 	{
 		printk("DEBUG: kmalloc failure fore stack");
 		//todo: errno
@@ -82,35 +80,38 @@ int do_ptree(struct prinfo *buf, int *nr)
 
 	/* get root process, that is init */
 	struct task_struct root = init_task;
-	printk("got init_task with name &d\n", root.pid);
-	stack[nextSIndex++] = root; // push it to stack. kBuf will be handled inside while loop
+	printk("DEBUG: got init_task with name %ld\n", root.pid);
+	dfsStack[nextSIndex++] = &root; // push it to stack. kBuf will be handled inside while loop
 
 	/* run dfs */
-	while(nextIndex > 0 )
+	while(nextSIndex > 0 )
 	{
 		/* pop stack */
-		struct task_struct curr = *(stack[nextIndex-1]);
+		struct task_struct *curr = (dfsStack[nextSIndex-1]);
 		/* save info to kBuf if kBuf index < nr */
 		// todo:
 		/* increment process num */
 		// todo:
 		/* put sibling to the stack */
 		pid_t sibling = sibling_pid(curr);
-		if(sibling != curr.pid) // supposing it's circular linked list
+		if(sibling != curr->pid) // supposing it's circular linked list
 		{
-			stack[nextSIndex++] = find_task_by_vpid(sibling);
+			dfsStack[nextSIndex++] = find_task_by_vpid(sibling);
 		}			
 		/* put children to the stack */
-		pid_t children = children_pid(curr);
-		if(children > 0) // refer to inline function child_pid
+		pid_t child = child_pid(curr);
+		if(child > 0) // refer to inline function child_pid
 		{
-			stack[nextSIndex++] = find_task_by_vpid(children);
+			dfsStack[nextSIndex++] = find_task_by_vpid(child);
 		}
 	}
 
 	/* unlock tasklist */
 	printk("DEBUG: unlock tasklist\n");
 	read_unlock(&tasklist_lock);
+
+	/* copy kBuf into buf */
+	// todo:
 
 	/* end */
 	printk("DEBUG: end of ptree\n");
