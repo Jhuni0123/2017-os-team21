@@ -11,26 +11,38 @@
 #include <linux/uaccess.h>
 #include <linux/kernel.h>
 
+/*
+ * task : &struct task_struct
+ * only use when child exists
+ */
+#define first_child_task(task) \
+    list_first_entry(&(task)->children, struct task_struct, sibling)
 
-inline struct task_struct* first_child_task(struct task_struct *task){
-    return list_first_entry(&task->children, struct task_struct, sibling);
+/* 
+ * task : &struct task_struct
+ * only use when next sibling exists
+ */
+#define next_sibling_task(task) \
+    list_first_entry(&(task)->sibling, struct task_struct, sibling)
+
+inline pid_t child_pid(struct task_struct *task)
+{
+    if(list_empty(&task->children))
+        return 0;
+    else 
+        return first_child_task(task)->pid;
 }
 
-inline struct task_struct* next_sibling_task(struct task_struct *task){
-    return list_first_entry(&task->sibling, struct task_struct, sibling);
+inline pid_t sibling_pid(struct task_struct *task)
+{
+    if(list_is_last(&task->sibling, &task->real_parent->children))
+        return 0;
+    else
+        return next_sibling_task(task)->pid;
 }
 
-inline pid_t child_pid(struct task_struct *task){
-    if(list_empty(&task->children))return 0;
-    else return first_child_task(task)->pid;
-}
-
-inline pid_t sibling_pid(struct task_struct *task){
-    if(list_is_last(&task->sibling, &task->real_parent->children))return 0;
-    return next_sibling_task(task)->pid;
-}
-
-void print_prinfo(struct task_struct *task){
+void print_prinfo(struct task_struct *task)
+{
     printk("DEBUG: state:  %ld\n", task->state);
     printk("DEBUG: pid:    %d\n", task->pid);
     printk("DEBUG: parent  %d\n", task->real_parent->pid);
@@ -41,7 +53,8 @@ void print_prinfo(struct task_struct *task){
 }
 
 // only use after validate memory access
-void __write_prinfo(struct prinfo *info, struct task_struct *task){
+void __write_prinfo(struct prinfo *info, struct task_struct *task)
+{
     info->state = task->state;
     info->pid = task->pid;
     info->parent_pid = task->real_parent->pid;
@@ -51,34 +64,36 @@ void __write_prinfo(struct prinfo *info, struct task_struct *task){
     strncpy(info->comm, task->comm, TASK_COMM_LEN);
 }
 
-void dfs_task_rec(struct task_struct *task){
+void dfs_task_rec(struct task_struct *task)
+{
     struct task_struct *child;
     struct list_head *head = &task->children;
-    list_for_each_entry(child, head, sibling){
+    list_for_each_entry(child, head, sibling) {
         // do something
         printk("DEBUG: pid: %d\n", child->pid);
         dfs_task_rec(child);
     }
 }
 
-int dfs_task(struct task_struct *init, struct prinfo *buf, int buflen, int *nr){
+int dfs_init_task(struct prinfo *buf, int buflen, int *nr)
+{
     int copied = 0;
     int count = 0;
-    struct task_struct *task = init;
-    while(true){
-        if(list_empty(&task->children)){
-            while(task != init && list_is_last(&task->sibling, &task->real_parent->children)){
+    struct task_struct *task = &init_task;
+
+    while(true) {
+        if(list_empty(&task->children)) {
+            while(list_is_last(&task->sibling, &task->real_parent->children)) {
                 task = task->real_parent;
             }
-            if(task == init)break;
             task = next_sibling_task(task);
-        }
-        else {
+        } else
             task = first_child_task(task);
-        }
-        // do something
-        printk("DEBUG: pid: %d\n", task->pid);
-        if(copied < buflen){
+
+        if(task == &init_task)
+            break;
+
+        if(copied < buflen) {
             __write_prinfo(buf + copied, task);
             copied++;
         }
@@ -90,55 +105,60 @@ int dfs_task(struct task_struct *init, struct prinfo *buf, int buflen, int *nr){
 
 int do_ptree(struct prinfo *buf, int *nr)
 {
+    int buflen;
+    int knr;
+    int total;
+    struct prinfo *kbuf;
+
     printk("DEBUG: ptree is called\n");
 
-    if(buf == NULL || nr == NULL){
+    if(buf == NULL || nr == NULL) {
         printk("DEBUG: ERROR: buf or nr is null pointer \n");
         return -EINVAL;
     }
 
-    if(!access_ok(int *, nr, 1)){
+    if(copy_from_user(&buflen, nr, sizeof(int))) {
+        printk("DEBUG: ERROR: nr is not accessable\n");
         return -EFAULT;
     }
 
-    int buflen;
-    int knr;
-    int total;
-
-    buflen = *nr;
-
-    if(buflen < 0){
+    if(buflen < 0) {
+        printk("DEBUG: ERROR: nr less than 0\n");
         return -EINVAL;
     }
 
-    struct prinfo *kbuf = (struct prinfo *) kmalloc(sizeof(struct prinfo) * buflen, GFP_ATOMIC);
+    kbuf = (struct prinfo *) kmalloc(sizeof(struct prinfo) * buflen, GFP_ATOMIC);
 
-    if(kbuf == NULL){
+    if(kbuf == NULL) {
         printk("DEBUG: kmalloc failure for kbuf");
-        //todo: errno 
-        return -1;
+        return -ENOMEM;
     }
 
     printk("DEBUG: lock tasklist\n");
     read_lock(&tasklist_lock);
 
-    total = dfs_task(&init_task, kbuf, buflen, &knr);
+    total = dfs_init_task(kbuf, buflen, &knr);
 
     printk("DEBUG: unlock tasklist\n");
     read_unlock(&tasklist_lock);
 
-    if(copy_to_user(buf, kbuf, sizeof(struct prinfo) * buflen)){
+    if(copy_to_user(buf, kbuf, sizeof(struct prinfo) * buflen)) {
         printk("DEBUG: copy_to_user to buf failure\n");
         return -EFAULT;
     }
     
-    *nr = knr;
     kfree(kbuf);
+
+    if(copy_to_user(nr, &knr, sizeof(int))) {
+        printk("DEBUG: copy_to_user to nr failure\n");
+        return -EFAULT;
+    }
 
     printk("DEBUG: end of ptree\n");
     return total;
 }
 
-SYSCALL_DEFINE2(ptree, struct prinfo*, buf, int*, nr){
+SYSCALL_DEFINE2(ptree, struct prinfo*, buf, int*, nr)
+{
     return do_ptree(buf, nr);
 }
