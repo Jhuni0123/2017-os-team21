@@ -38,9 +38,9 @@ int test()
 		FAIL("valid function call with small parameter");
 	if(syscall(380, small_buf, &nr) >= 0 || errno != EFAULT)
 		FAIL("small buf & large nr");
-	if(syscall(380, buf, negative_nr) >= 0 || errno != EINVAL)
+	if(syscall(380, buf, &negative_nr) >= 0 || errno != EINVAL)
 		FAIL("negative nr");
-	if(syscall(380, buf, zero_nr) < 0)
+	if(syscall(380, buf, &zero_nr) < 0)
 		FAIL("valid function call with nr=0");	
 	
 	syscall(380, buf, &small_nr);
