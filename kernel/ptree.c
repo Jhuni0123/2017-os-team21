@@ -75,7 +75,7 @@ void dfs_task_rec(struct task_struct *task)
     }
 }
 
-int dfs_init_task(struct prinfo *buf, int buflen, int *nr)
+int dfs_init_task(struct prinfo *kbuf, int buflen, int *knr)
 {
     int copied = 0;
     int count = 0;
@@ -94,12 +94,12 @@ int dfs_init_task(struct prinfo *buf, int buflen, int *nr)
             break;
 
         if(copied < buflen) {
-            __write_prinfo(buf + copied, task);
+            __write_prinfo(kbuf + copied, task);
             copied++;
         }
         count++;
     }
-    (*nr) = copied;
+    (*knr) = copied;
     return count;
 }
 
