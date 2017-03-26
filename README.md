@@ -3,99 +3,99 @@ proj1 implements a syscall 'ptree' at syscall number 380 that gets a buffer and 
 
 # Files Changed
 ## Preparation
-- include/linux/prinfo.h 
+- `include/linux/prinfo.h` 
 
-  define struct of prinfo
+  define `struct prinfo`
 
 ## Define Syscall of ptree
 
-- include/linux/syscalls.h
+- `include/linux/syscalls.h`
 
-  define sys_ptree
+  define `sys_ptree`
   
-  include linux/prinfo.h
+  include `linux/prinfo.h`
     
-- arch/arm/include/asm/unistd.
+- `arch/arm/include/asm/unistd.h`
 
   enlarge number of syscalls from 380 to 384, in alignment of 4 bytes
 
-- arch/arm/include/uapi/asm/unistd.h <br/>
+- `arch/arm/include/uapi/asm/unistd.h`
 
-  define ptree as syscall_base+380
+  define ptree as `syscall_base+380`
 
-- arch/arm/kernel/calls.S  <br/>
+- `arch/arm/kernel/calls.S`
   
-  include call of sys_ptree
+  include call of `sys_ptree`
 
 ## Make ptree Logic
 
-- kernel/ptree.c <br/>
+- `kernel/ptree.c`
 
   to be explained.
   
 ## Test Code
 
-- artik/main.c <br/>
+- `artik/main.c`
 
   print out process tree
 
-- artik/test.c  <br/>
+- `artik/test.c`
   
   test for developers to check if kernel code is working correctly
 
 # How ptree Is Implemented
 
-sys_ptree gets two arguments: struct prinfo * buf and int * nr.  <br/>
+`sys_ptree` gets two arguments: `struct prinfo * buf` and `int * nr`.
 
-ptree checks errors of  <br/>
-1. EINVAL: buf, nr null pointers 
-2. EFAULT: buf, nr not in user address space
-3. ENOMEM: unable to allocate kernel heap memory  <br/>
+ptree checks errors of
+1. `EINVAL`: `buf`, `nr` null pointers 
+2. `EFAULT`: `buf`, `nr` not in user address space
+3. `ENOMEM`: unable to allocate kernel heap memory
 
-It locks tasklist_lock and runs dfs starting from init_task. <br/>
-While running dfs, it copies process information into kernel buffer kbuf. <br/>
-After dfs, it unlocks tasklist_lock and copy kernel buffer entries into user buffer buf. <br/>
-Then it updates nr to match the number of entries copied from kbuf to buf and returns process count. <br/>
+It locks `tasklist_lock` and runs dfs starting from `init_task`.
+While running dfs, it copies process information into kernel buffer `kbuf`.
+After dfs, it unlocks `tasklist_lock` and copy kernel buffer entries into user buffer `buf`.
+Then it updates `nr` to match the number of entries copied from `kbuf` to `buf` and returns process count.
 
 ## Functions and Fuctionalities
-- first_child_task(&struct task_struct)  <br/>
+- `first_child_task(&struct task_struct)`
 
-  macro: exploits list_first_entry macro. only used when child exists.
+  macro: exploits `list_first_entry` macro. only used when child exists.
 
-- next_sibling_task(&struct task_struct) <br/>
+- `next_sibling_task(&struct task_struct)`
    
-  macro: exploits list_first_entry macro. only used when next sibling exists.
+  macro: exploits `list_first_entry` macro. only used when next sibling exists.
 
-- child_pid(struct task_struct *) <br/>
+- `child_pid(struct task_struct *)`
   
-  inline: exploits list_empty and first_child_task macro. Used for prinfo.
+  inline: exploits `list_empty` and `first_child_task` macro. Used for `prinfo`.
 
-- sibling_pid(struct task_struct *) <br/>
+- `sibling_pid(struct task_struct *)`
   
-  inline: exploits list_is_last and next_sibling_task macro. Used for prinfo.
+  inline: exploits `list_is_last` and `next_sibling_task` macro. Used for `prinfo`.
 
-- void print_prinfo(struct task_struct *) <br/>
+- `void print_prinfo(struct task_struct *)`
   
   function: debugging purpose
 
-- void __write_prinfo (struct prinfo *, struct task_struct *) <br/>
+- `void __write_prinfo (struct prinfo *, struct task_struct *)`
 
-  function: writes task infomation to prinfo  
-- void dfs_task_rec(struct task_struct *) <br/>
+  function: writes task infomation to `prinfo`  
+- `void dfs_task_rec(struct task_struct *)`
   
   function: recursive dfs. Implemented but not used.
 
-- int dfs_init_task(struct prinfo *, int, int *)  <br/>
+- `int dfs_init_task(struct prinfo *, int, int *)`
   
-  function: runs dfs starting from init_task, without stack but with if.  <br/>
-  If current task has child task (!list_empty(&task->children) it moves on to that child.  <br/>
-  If current task has no child but next sibling task(!list_is_last(&task->sibling, &task->real_parent->children), then it moves to that sibling.  <br/>
-  If current task has no child and no sibling, it moves to its ancestors who have next sibling.  <br/>
-  If current task comes all the way back to init_task, then it breaks.  <br/>
-  While doing so, for each task current task has moved through, task information is copied to kbuf until buffer is full or it dfs through all processes.  <br/>
-  Count of copied entries of buffer is updated to int *. <br/>
-  Returns count of all processes running. <br/>
-- int do_ptree(struct prinfo *, int *) <br/>
-  function: checks for errors, define and malloc kbuf, lock tasklist_lock, call dfs, unlock tasklist_lock, copy from kbuf to buf, knr to nr, free kbuf and return result.
-- SYSCALL_DEFINE2(ptree, struct prinfo*, buf, int*, nr) <br/>
-  syscall: calls do_ptree.
+  function: runs dfs starting from `init_task`, without stack but with if. 
+  If current task has child task (`!list_empty(&task->children)`) it moves on to that child.
+  If current task has no child but next sibling task(`!list_is_last(&task->sibling, &task->real_parent->children)`), then it moves to that sibling.
+  If current task has no child and no sibling, it moves to its ancestors who have next sibling.
+  If current task comes all the way back to `init_task`, then it breaks.
+  While doing so, for each task current task has moved through, task information is copied to kbuf until buffer is full or it dfs through all processes.
+  Count of copied entries of buffer is updated to int *.
+  Returns count of all processes running.
+- `int do_ptree(struct prinfo *, int *)`
+  function: checks for errors, define and malloc `kbuf`, lock `tasklist_lock`, call `dfs_init_task`, unlock `tasklist_lock`, copy from `kbuf` to `buf`, `knr` to `nr`, free `kbuf` and return result.
+- `SYSCALL_DEFINE2(ptree, struct prinfo*, buf, int*, nr)`
+  syscall: calls `do_ptree`.
