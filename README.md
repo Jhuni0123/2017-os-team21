@@ -49,6 +49,16 @@ While running dfs, it copies process information into kernel buffer `kbuf`.
 After dfs, it unlocks `tasklist_lock` and copy kernel buffer entries into user buffer `buf`.
 Then it updates `nr` to match the number of entries copied from `kbuf` to `buf` and returns process count.
 
+## Note: How Children and Sibling Tasks are connected in linked list
+
+In `task_struct` there are two `list_head`s: `children` and `sibling`, that make one `task_struct` to be a member of two circular doubly linked lists.
+For `children` linked list, next points to `list_head sibling` of its child task. Then it flows into siblings of that child task, enabling user to surf through all children processes. If there is no child task, next points to itself.
+For `sibling` linked list, next points to `list_head sibling`of its sibling task. If there is no more sibling, it points to `list_head children` of its parent task.
+Exceptionally for init_task, which has no parent nor sibling, `sibling` linked list's next points to itself.
+After all, `sibling` list_head forms the main linked list and `children` functions as a dummy head of that main list.
+Because it's a linked list with dummy head, next pointing to itself means an empty list. That's why list_empty can be used to check if a task has a child or not.
+
+
 ## Functions and Fuctionalities
 - `first_child_task(&struct task_struct)`
   - macro: exploits `list_first_entry` macro. only used when child exists.
