@@ -99,6 +99,8 @@ Because it's a linked list with dummy head, next pointing to itself means an emp
   
 # About Prenstation Slides
 Original presentation slides were made on Google Docs. 
+
 Uploaded file is a downloaded form of it, and its format is somehow broken.
+
 If you want to check original version, please refer to https://docs.google.com/presentation/d/1pHm_DzpXZxTbuyN_efnVSvkP1cwTcFEdK4q1zMPpBOs/edit?usp=sharing.
 
