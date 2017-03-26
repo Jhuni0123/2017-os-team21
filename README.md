@@ -86,7 +86,7 @@ Because it's a linked list with dummy head, next pointing to itself means an emp
   
 1. If current task has child task (`!list_empty(&task->children)`) it moves on to that child.
 1. If current task has no child but next sibling task(`!list_is_last(&task->sibling, &task->real_parent->children)`), then it moves to that sibling.
-1. If current task has no child and no sibling, it moves to its ancestors who have next sibling.
+1. If current task has no child and no sibling, it moves to its nearest ancestor who has next sibling.
 1. If current task comes all the way back to `init_task`, then it breaks.
 1. While doing so, for each task current task has moved through, task information is copied to kbuf until buffer is full or it dfs through all processes.
 1. Count of copied entries of buffer is updated to `int *`.
@@ -96,3 +96,9 @@ Because it's a linked list with dummy head, next pointing to itself means an emp
   - function: checks for errors, define and malloc `kbuf`, lock `tasklist_lock`, call `dfs_init_task`, unlock `tasklist_lock`, copy from `kbuf` to `buf`, `knr` to `nr`, free `kbuf` and return result.
 - `SYSCALL_DEFINE2(ptree, struct prinfo*, buf, int*, nr)`
   - syscall: calls `do_ptree`.
+  
+# About Prenstation Slides
+Original presentation slides were made on Google Docs. 
+Uploaded file is a downloaded form of it, and its format is somehow broken.
+If you want to check original version, please refer to https://docs.google.com/presentation/d/1pHm_DzpXZxTbuyN_efnVSvkP1cwTcFEdK4q1zMPpBOs/edit?usp=sharing.
+
