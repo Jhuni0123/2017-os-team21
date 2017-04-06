@@ -1,5 +1,8 @@
 #include <linux/rotation.h>
 #include <linux/list.h>
+#include <linux/slab.h>
+#include <linux/sched.h>
+#include <linux/errno.h>
 
 #define INITIAL_ROT = 0;
 
@@ -29,6 +32,25 @@ int is_locked_write = 0;
 int is_waiting_write = 0;
 struct range_desc *w_write = NULL;
 int result = 0;
+
+int do_rotlock_read(int degree, int range)
+{
+	struct range_desc* newitem =
+		(struct range_desc*) kmalloc(sizeof(struct range_desc), GFP_KERNEL);
+	if(newitem == NULL)
+		return -ENOMEM;
+
+	newitem->degree = degree;
+	newitem->range = range;
+	newitem->tid = task_pid_vnr(current);
+	newitem->node = LIST_HEAD_INIT(newitem->node);
+
+	list_add_tail(newitem, wait_read);
+
+	/* make thread sleep */
+
+
+}
 
 int do_set_rotation(int degree)
 {
@@ -97,3 +119,30 @@ int do_set_rotation(int degree)
   	return result;
 }
 
+SYSCALL_DEFINE1(set_rotation, int, degree)
+{
+	return do_set_rotation(degree);
+}
+
+SYSCALL_DEFINE2(rotlock_read, int, degree, int, range)
+{
+	return do_rotlock_read(degree, range);
+}
+
+SYSCALL_DEFINE2(rotlock_write, int, degree, int, range)
+{
+	return 0;
+	//return do_rotlock_write(degree, range);
+}
+
+SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range)
+{
+	return 0;
+	//return do_rotunlock_read(degree, range);
+}
+
+SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range)
+{
+	return 0;
+	//return do_rotunlock_write(degree, range);
+}
