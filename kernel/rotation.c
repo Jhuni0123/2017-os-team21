@@ -3,121 +3,159 @@
 #include <linux/slab.h>
 #include <linux/sched.h>
 #include <linux/errno.h>
+#include <linux/syscalls.h>
 
-#define INITIAL_ROT = 0;
+#define INITIAL_ROT 0
 
 int device_rot = INITIAL_ROT;
 int range_desc_init = 0;
 
-struct range_desc wait_read;
-struct range_desc wait_write;
-struct range_desc locked_read;
-struct range_desc locked_write;
+struct range_desc waiting_locks;
+struct range_desc assigned_reads;
+struct range_desc assigned_writes;
 
-void init_range_desc(range_desc *head){
+void init_range_desc(struct range_desc *head){
 	head->degree = -1;
 	head->range = -1;
 	head->tid = -1;
-	head->node = LIST_HEAD_INIT(head->node);
+	INIT_LIST_HEAD(&head->node);
 }
 
 void init_range_lists(){
-	init_range_desc(&wait_read);
- 	init_range_desc(&wait_write);
-	init_range_desc(&locekd_read);
-	init_range_desc(&locked_write);
+	init_range_desc(&waiting_locks);
+ 	init_range_desc(&assigned_reads);
+	init_range_desc(&assigned_writes);
 }
 
 int is_locked_write = 0;
 int is_waiting_write = 0;
 struct range_desc *w_write = NULL;
-int result = 0;
 
-int do_rotlock_read(int degree, int range)
+int A()
 {
-	struct range_desc* newitem =
-		(struct range_desc*) kmalloc(sizeof(struct range_desc), GFP_KERNEL);
-	if(newitem == NULL)
-		return -ENOMEM;
-
-	newitem->degree = degree;
-	newitem->range = range;
-	newitem->tid = task_pid_vnr(current);
-	newitem->node = LIST_HEAD_INIT(newitem->node);
-
-	list_add_tail(newitem, wait_read);
-
-	/* make thread sleep */
-
-
-}
-
-int do_set_rotation(int degree)
-{
-	/* update device rotation info */
-	device_rot = degree;
 	/* initialize variables */
 	is_locked_write = 0;
 	is_waiting_write = 0;
 	w_write = NULL;
+	/* declare variables */
+	int result = 0;
   	/* check if there is a locked write lock
 	 * if there is already a writer lock holding the rotation
 	 * no more lock can be allocated: return 0 */
-	struct range_desc *pos = (struct range_desc *) kmalloc(sizeof(struct range_desc), GFP_ATOMIC);
- 	if(pos == NULL){
-		printk("DEBUG: kamlloc failure for pos");
-		return -ENOMEM;
-	}
-	list_for_each_entry(pos, &locked_write.node, head){
+	struct range_desc *pos = NULL;
+	list_for_each_entry(pos, &assigned_writes.node, node){
 		if(range_in_rotation(pos)){
     		is_locked_write = 1;
     		return 0;
     	}
   	}
-	/* check if there is a write lock waiting to be allocated */
-	list_for_each_entry(pos, &waiting_write.node, head){
-    	if(range_in_rotation(pos)){
-			is_waiting_write = 1;
-	    	w_write = pos;
-     		break;
-    	}
-  	}
-	/* If there is a waiting write lock, check if there is
-	 * an allocated read lock.
-     * If there is not, allocate waiting read locks */
-	int can_alloc_write = 1;
-	if(is_waiting_write){
-    	list_for_each_entry(pos, &locked_read.node, head){
-      		if(range_overlap(w_write, pos)){
-        		cannot_alloc_write = 0;
-        		break;
-      		}
-    	}
-    	if(can_alloc_write){
-      		list_del(w_write);
-      		list_add(w_write, &locked_write.node);
-      		is_locked_write = 1;
-      		is_waiting_write = 0;
-      		w_write = NULL;
-      		// to do: unblock process block
-      		return 1;
-    	} else {
-      		return 0;
-    	}
-	/* If there is no waiting write lock,
-     * it's safe to allocate waiting read locks.
-     * Allocate all. */
-  	} else {
-    	list_for_each_entry(pos, &waiting_read.node, head){
-      		if(range_in_rotation(pos)){
-        		list_del(pos);
-        		list_add(pos, &locked_read.node, head);
-        		result++;
-      		}
-    	}
-  	}
-  	return result;
+	/* See all the waiting locks in FIFO order
+	 * until confronting a writing lock request
+	 * whose range matches current device rotation.
+	 * If it's a read lock in correct range, assign it.
+	 * If it's a write lock in correct range, assign it 
+	 * if and only if it's the first lock of the list 
+	 * which is in correct, and there is no read lock assigned.
+	 * The second condition is to be checked later*/
+	int first_entry = 1;
+	int is_write_to_be_assigned = 0;
+	list_for_each_entry(pos, &waiting_locks.node, node){
+      	if(range_in_rotation(pos)){
+			if(pos->type== READ_LOCK_FLAG){
+				list_del(&pos->node);
+				list_add_tail(&pos->node, &assigned_reads.node);
+				// todo: make the task wake up
+				result++;
+				first_entry = 0;
+			} else {
+				is_waiting_write = 1;
+				w_write = pos;
+				if(first_entry){
+					is_write_to_be_assigned = 1;
+					first_entry = 0;
+				}
+				break;
+			}
+		}
+   	}
+	/* Sanity check: result > 0 and is_write_to_be_assigned == 1
+	 * cannot happen at the same time */
+	if((result>0)&&is_write_to_be_assigned){
+		printk("DEBUG: error: result>0 and is_write_to_be_assigned happen at the same time.\n");
+		return -1;
+	}
+	/* If there is a write lock request that might be assigned,
+	 * check if there is already read locks assigned */
+	int is_locked_read = 0;
+	if(is_write_to_be_assigned){
+		list_for_each_entry(pos, &assigned_reads.node, node){
+			if(range_in_rotation(pos)){
+				is_locked_read = 1;
+				break;
+			}
+		}
+		if(!is_locked_read){
+			list_del(&w_write->node);
+			list_add_tail(&w_write->node, &assigned_writes.node);
+			is_locked_write = 1;
+			is_waiting_write = 0;
+			w_write = NULL;
+			// todo: unblock process block
+			return 1;
+		}
+	}
+	return result;
 }
+
+int do_rotlock_read(int degree, int range)
+{
+	// todo: error checking
+
+	/* make a new range_desc to hold lock info */
+	struct range_desc* newitem =
+		(struct range_desc*) kmalloc(sizeof(struct range_desc), GFP_KERNEL);
+	if(newitem == NULL)
+		return -ENOMEM;
+
+	newitem->type = READ_LOCK_FLAG;
+	newitem->degree = degree;
+	newitem->range = range;
+	newitem->tid = task_pid_vnr(current);
+	INIT_LIST_HEAD(&newitem->node);
+
+	/* If device lock is in newitem's range
+	   and there is no locked write nor waiting write,
+	   give lock */
+	// todo: set lock x (reason: access vars is_locked_write, is_waiting_write)
+	if(range_in_rotation(newitem)&&(!is_locked_write)&&(!is_waiting_write)){
+      	list_add_tail(&newitem->node, &assigned_reads.node);
+      	return 0;
+	}
+	// todo: unset lock x
+
+	/* If it cannot be assigned, add it to wait and  make thread sleep */
+	list_add_tail(&newitem->node, &waiting_locks.node);
+	// todo: make it sleep
+
+	return 0;
+	
+}
+
+int do_rotlock_write(int degree, int range)
+{
+}
+
+int do_set_rotation(int degree)
+{	
+	/* update device rotation info */
+	device_rot = degree;
+	/* call A */
+	// todo: set lock x
+	int result = A();
+	// todo: unset lock x
+	return result;
+}
+
 
 SYSCALL_DEFINE1(set_rotation, int, degree)
 {
