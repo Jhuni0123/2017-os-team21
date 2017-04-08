@@ -152,6 +152,15 @@ int do_rotlock_read(int degree, int range)
 
 int do_rotlock_write(int degree, int range)
 {
+	/* check if degree and range is correct */
+	if(degree < 0 || degree > 360){
+		printk("DEBUG: error: degree out of range\n");
+		return -1;
+	}
+	if(range < 0 || range > 360){
+		printk("DEBUG: error: range out of range\n");
+		return -1;
+	}
 	// todo: error checking
 
 	/* make a new range_desc to hold lock info */
