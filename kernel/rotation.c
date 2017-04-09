@@ -10,7 +10,8 @@
 int device_rot = INITIAL_ROT;
 int range_desc_init = 0;
 
-struct range_desc waiting_locks;
+struct range_desc waiting_reads;
+struct range_desc waiting_writes;
 struct range_desc assigned_reads;
 struct range_desc assigned_writes;
 
@@ -25,7 +26,8 @@ void init_range_desc(struct range_desc *head){
 }
 
 void init_range_lists(){
-	init_range_desc(&waiting_locks);
+	init_range_desc(&waiting_reads);
+	init_range_desc(&waiting_writes);
  	init_range_desc(&assigned_reads);
 	init_range_desc(&assigned_writes);
 }
@@ -33,88 +35,76 @@ void init_range_lists(){
 /* common functions used by syscalls */
 static inline int check_param(int degree, int range);
 
-
-int is_locked_write = 0;
-int is_waiting_write = 0;
-struct range_desc *w_write = NULL;
-
 int A() /* always use with lock x */
 {
-	/* initialize variables */
-	is_locked_write = 0;
-	is_waiting_write = 0;
-	w_write = NULL;
-	/* declare variables */
+	/* declare variable */
 	int result = 0;
   	/* check if there is a locked write lock
 	 * if there is already a writer lock holding the rotation
 	 * no more lock can be allocated: return 0 */
 	struct range_desc *pos = NULL;
 	list_for_each_entry(pos, &assigned_writes.node, node){
-		if(range_in_rotation(pos)){
-    		is_locked_write = 1;
+		if(range_in_rotation(pos))
     		return 0;
-    	}
   	}
-	/* See all the waiting locks in FIFO order
-	 * until confronting a writing lock request
-	 * whose range matches current device rotation.
-	 * If it's a read lock in correct range, assign it.
-	 * If it's a write lock in correct range, assign it 
-	 * if and only if it's the first lock of the list 
-	 * which is in correct, and there is no read lock assigned.
-	 * The second condition is to be checked later*/
-	int first_entry = 1;
-	int is_write_to_be_assigned = 0;
-	list_for_each_entry(pos, &waiting_locks.node, node){
-      	if(range_in_rotation(pos)){
-			if(pos->type== READ_LOCK_FLAG){
+	/* check if there is a write lock waiting to be allocated.
+	 * If there is, check if there is an allocated lock that overlaps with it.
+	 * If there is no overlapping allocated lock, assign that waiting write lock. */
+	list_for_each_entry(pos, &waiting_writes.node, node){
+		if(range_in_rotation(pos)){
+			int can_alloc_write = 1;
+			struct range_desc *temp = NULL;
+			list_for_each_entry(temp, &assigned_reads.node, node){
+				if(range_overlap(pos, temp)){
+					can_alloc_write = 0;
+					break;
+				}
+			}
+			list_for_each_entry(temp, &assigned_writes.node, node){
+				if(range_overlap(pos, temp)){
+					can_alloc_write = 0;
+					break;
+				}
+			}
+			if(can_alloc_write){
+				list_del(&pos->node);
+				list_add_tail(&pos->node, &assigned_writes.node);
+				pos->assigned = 1;
+				if(pos->task != NULL)
+					wake_up_process(pos->task);
+				return 1;
+			} else {
+				return 0;
+			}
+		}
+	}
+	/* If there is no waiting write lock,
+	 * allocate all waiting read locks in correct range
+	 * that do not overlap with assigned write locks */
+	struct range_desc *temp = NULL;
+	list_for_each_entry(pos, &waiting_reads.node, node){
+		if(range_in_rotation(pos)){
+			int is_overlap_w_write = 0;
+			list_for_each_entry(temp, &assigned_reads.node, node){
+				if(range_overlap(pos, temp)){
+					is_overlap_w_write = 1;
+					break;
+				}
+			}
+			if(!is_overlap_w_write){
 				list_del(&pos->node);
 				list_add_tail(&pos->node, &assigned_reads.node);
-				// todo: make the task wake up
+				pos->assigned = 1;
+				if(pos->task != NULL)
+					wake_up_process(pos->task);
 				result++;
-				first_entry = 0;
-			} else {
-				is_waiting_write = 1;
-				w_write = pos;
-				if(first_entry){
-					is_write_to_be_assigned = 1;
-					first_entry = 0;
-				}
-				break;
 			}
-		}
-   	}
-	/* Sanity check: result > 0 and is_write_to_be_assigned == 1
-	 * cannot happen at the same time */
-	if((result>0)&&is_write_to_be_assigned){
-		printk("DEBUG: error: result>0 and is_write_to_be_assigned happen at the same time.\n");
-		return -1;
-	}
-	/* If there is a write lock request that might be assigned,
-	 * check if there is already read locks assigned */
-	int is_locked_read = 0;
-	if(is_write_to_be_assigned){
-		list_for_each_entry(pos, &assigned_reads.node, node){
-			if(range_in_rotation(pos)){
-				is_locked_read = 1;
-				break;
-			}
-		}
-		if(!is_locked_read){
-			list_del(&w_write->node);
-			list_add_tail(&w_write->node, &assigned_writes.node);
-			is_locked_write = 1;
-			is_waiting_write = 0;
-			w_write = NULL;
-			// todo: unblock process block
-			return 1;
 		}
 	}
 	return result;
 }
 
-int do_rotlock(int degree, int range, char lock_flag)
+int do_rotlock(int degree, int range, char lock_flag, struct range_desc *head)
 {
 	if(!check_param(degree, range))
 		return -EINVAL;
@@ -134,7 +124,7 @@ int do_rotlock(int degree, int range, char lock_flag)
 	newitem->assigned = 0;
 	INIT_LIST_HEAD(&newitem->node);
 
-	list_add_tail(&newitem->node, &waiting_locks.node);	
+	list_add_tail(&newitem->node, &head->node);	
 	if(range_in_rotation(newitem))
 		A();
 
@@ -204,12 +194,12 @@ SYSCALL_DEFINE1(set_rotation, int, degree)
 
 SYSCALL_DEFINE2(rotlock_read, int, degree, int, range)
 {
-	return do_rotlock(degree, range, READ_LOCK_FLAG);
+	return do_rotlock(degree, range, READ_LOCK_FLAG, &waiting_reads);
 }
 
 SYSCALL_DEFINE2(rotlock_write, int, degree, int, range)
 {
-	return do_rotlock(degree, range, WRITE_LOCK_FLAG);
+	return do_rotlock(degree, range, WRITE_LOCK_FLAG, &waiting_writes);
 }
 
 SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range)
