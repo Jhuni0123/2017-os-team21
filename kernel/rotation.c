@@ -18,6 +18,8 @@ void init_range_desc(struct range_desc *head){
 	head->degree = -1;
 	head->range = -1;
 	head->tid = -1;
+	head->type = -1;
+	head->assigned = -1;
 	INIT_LIST_HEAD(&head->node);
 }
 
@@ -123,10 +125,11 @@ int do_rotlock(int degree, int range, char lock_flag)
 		return -ENOMEM;
 	}
 
-	newitem->type = lock_flag;
 	newitem->degree = degree;
 	newitem->range = range;
 	newitem->tid = task_pid_vnr(current);
+	newitem->type = lock_flag;
+	newitem->assigned = 0;
 	INIT_LIST_HEAD(&newitem->node);
 
 	list_add_tail(&newitem->node, &waiting_locks.node);	
@@ -149,14 +152,17 @@ int do_rotlock(int degree, int range, char lock_flag)
 
 int do_rotunlock_read(int degree, int range)
 {
+	if(check_param(degree, range) == 0)
+		return -EINVAL;
+
 	/* find that exact lock */
 	int is_there = 0;
 	struct range_desc *curr = NULL;
 	list_for_each_entry(curr, &assigned_reads.node, node){
 		if((curr->type == READ_LOCK_FLAG)
-				&&(curr->degree == degree)
-				&&(curr->range == range)
-				&&(curr->tid == task_pid_vnr(current))){
+			&&(curr->degree == degree)
+			&&(curr->range == range)
+			&&(curr->tid == task_pid_vnr(current))){
 			is_there = 1;
 			break;
 		}
