@@ -115,7 +115,7 @@ int A() /* always use with lock x */
 
 int do_rotlock(int degree, int range, char lock_flag)
 {
-	if(check_param(degree, range) == 0)
+	if(!check_param(degree, range))
 		return -EINVAL;
 	
 	struct range_desc* newitem =
@@ -150,26 +150,21 @@ int do_rotlock(int degree, int range, char lock_flag)
 	
 }
 
-int do_rotunlock_read(int degree, int range)
+int do_rotunlock(int degree, int range, char lock_flag, struct range_desc* head)
 {
-	if(check_param(degree, range) == 0)
+	if(!check_param(degree, range))
 		return -EINVAL;
-
+	
 	/* find that exact lock */
-	int is_there = 0;
-	struct range_desc *curr = NULL;
-	list_for_each_entry(curr, &assigned_reads.node, node){
-		if((curr->type == READ_LOCK_FLAG)
-			&&(curr->degree == degree)
-			&&(curr->range == range)
-			&&(curr->tid == task_pid_vnr(current))){
-			is_there = 1;
+	pid_t tid = task_pid_vnr(current);
+	struct range_desc *curr;
+	list_for_each_entry(curr, &head->node, node) {
+		if((curr->degree == degree)&&(curr->range == range)&&(curr->tid == tid))
 			break;
-		}
 	}
-	if(!is_there){
+	if(curr == head) {	/* this is true only if iteration is finished */
 		printk("DEBUG: error: no match for rotunlock_read\n");
-		return -1;
+		return -EINVAL;
 	}
 	// todo: error check
 	
@@ -177,44 +172,12 @@ int do_rotunlock_read(int degree, int range)
 	 * If device lock is in curr's range, call A */
 	// todo: set lock x 
 	list_del(&curr->node);
+	kfree(curr);
 	if(range_in_rotation(curr))
-      	A();	
+      		A();	
 	// todo: unset lock x
 
 	return 0;
-
-}
-
-int do_rotunlock_write(int degree, int range)
-{
-	/* find that exact lock */
-	int is_there = 0;
-	struct range_desc *curr = NULL;
-	list_for_each_entry(curr, &assigned_writes.node, node){
-		if((curr->type == WRITE_LOCK_FLAG)
-				&&(curr->degree == degree)
-				&&(curr->range == range)
-				&&(curr->tid == task_pid_vnr(current))){
-			is_there = 1;
-			break;
-		}
-	}
-	if(!is_there){
-		printk("DEBUG: error: no match for rotunlock_write\n");
-		return -1;
-	}
-	// todo: error check
-	
-	/* delete it from list.
-	 * If device lock is in curr's range, call A */
-	// todo: set lock x 
-	list_del(&curr->node);
-	if(range_in_rotation(curr))
-      	A();	
-	// todo: unset lock x
-
-	return 0;
-
 
 }
 
@@ -249,14 +212,12 @@ SYSCALL_DEFINE2(rotlock_write, int, degree, int, range)
 
 SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range)
 {
-	return 0;
-	//return do_rotunlock_read(degree, range);
+	return do_rotunlock(degree, range, READ_LOCK_FLAG, &assigned_reads);
 }
 
 SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range)
 {
-	return 0;
-	//return do_rotunlock_write(degree, range);
+	return do_rotunlock(degree, range, WRITE_LOCK_FLAG, &assigned_writes);
 }
 
 /* implementation of common functions */
