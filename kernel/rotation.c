@@ -18,6 +18,7 @@ void init_range_desc(struct range_desc *head){
 	head->degree = -1;
 	head->range = -1;
 	head->tid = -1;
+	head->task = NULL;
 	head->type = -1;
 	head->assigned = -1;
 	INIT_LIST_HEAD(&head->node);
@@ -128,6 +129,7 @@ int do_rotlock(int degree, int range, char lock_flag)
 	newitem->degree = degree;
 	newitem->range = range;
 	newitem->tid = task_pid_vnr(current);
+	newitem->task = current;
 	newitem->type = lock_flag;
 	newitem->assigned = 0;
 	INIT_LIST_HEAD(&newitem->node);
@@ -140,7 +142,7 @@ int do_rotlock(int degree, int range, char lock_flag)
 	 * see: http://www.linuxjournal.com/article/8144 */
 	// TODO: grab lock while accessing newitem
 	set_current_state(TASK_INTERRUPTIBLE);
-	while(newitem->assigned) {
+	while(!newitem->assigned) {
 		schedule();
 		set_current_state(TASK_INTERRUPTIBLE);
 	}
@@ -174,7 +176,7 @@ int do_rotunlock(int degree, int range, char lock_flag, struct range_desc* head)
 	list_del(&curr->node);
 	kfree(curr);
 	if(range_in_rotation(curr))
-      		A();	
+		A();	
 	// todo: unset lock x
 
 	return 0;

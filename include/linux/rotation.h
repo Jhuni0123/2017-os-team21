@@ -3,6 +3,7 @@
 
 #include <linux/types.h>
 #include <linux/list.h>
+#include <linux/sched.h>
 
 #define READ_LOCK_FLAG 0
 #define WRITE_LOCK_FLAG 1
@@ -14,6 +15,7 @@ struct range_desc
 	int degree;
 	int range;
 	pid_t tid;
+	struct task_struct* task;
 	char type;
 	char assigned;
 	struct list_head node;
