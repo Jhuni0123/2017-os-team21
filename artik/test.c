@@ -5,7 +5,7 @@
 #define ROTLOCK_READ 381
 #define ROTLOCK_WRITE 382
 #define ROTUNLOCK_READ 383
-#define ROTUNLOCK_WRITE 384
+#define ROTUNLOCK_WRITE 385
 
 
 int main()

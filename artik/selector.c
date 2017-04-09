@@ -4,7 +4,7 @@
 #include <sys/syscall.h>
 
 #define ROTLOCK_WRITE 382
-#define ROTUNLOCK_WRITE 384
+#define ROTUNLOCK_WRITE 385
 
 
 int main(int argc, char *argv[])
