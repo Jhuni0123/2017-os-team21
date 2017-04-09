@@ -4,6 +4,9 @@
 #include <linux/types.h>
 #include <linux/list.h>
 
+#define READ_LOCK_FLAG 0
+#define WRITE_LOCK_FLAG 1
+
 extern int device_rot;
 
 struct range_desc
@@ -11,14 +14,15 @@ struct range_desc
 	int degree;
 	int range;
 	pid_t tid;
+	char type;
+	char assigned;
 	struct list_head node;
 };
 
 /* circular list with dummy node */
-extern struct range_desc wait_read;
-extern struct range_desc wait_write;
-extern struct range_desc locked_read;
-extern struct range_desc locked_write;
+extern struct range_desc waiting_locks;
+extern struct range_desc assigned_reads;
+extern struct range_desc assigned_writes;
 
 /* rotation utility functions */
 static int range_in_rotation(struct range_desc* rd)

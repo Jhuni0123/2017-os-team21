@@ -27,6 +27,10 @@ void init_range_lists(){
 	init_range_desc(&assigned_writes);
 }
 
+/* common functions used by syscalls */
+static inline int check_param(int degree, int range);
+
+
 int is_locked_write = 0;
 int is_waiting_write = 0;
 struct range_desc *w_write = NULL;
@@ -107,82 +111,37 @@ int A() /* always use with lock x */
 	return result;
 }
 
-int do_rotlock_read(int degree, int range)
+int do_rotlock(int degree, int range, char lock_flag)
 {
-	/* check if degree and range is correct */
-	if(degree < 0 || degree > 360){
-		printk("DEBUG: error: degree out of range\n");
-		return -1;
-	}
-	if(range < 0 || range > 360){
-		printk("DEBUG: error: range out of range\n");
-		return -1;
-	}
-	// todo: error checking
-	/* make a new range_desc to hold lock info */
-	struct range_desc* newitem =
-		(struct range_desc*) kmalloc(sizeof(struct range_desc), GFP_KERNEL);
-	if(newitem == NULL)
-		return -ENOMEM;
-
-	newitem->type = READ_LOCK_FLAG;
-	newitem->degree = degree;
-	newitem->range = range;
-	newitem->tid = task_pid_vnr(current);
-	INIT_LIST_HEAD(&newitem->node);
-
-	/* If device lock is in newitem's range
-	   and there is no locked write nor waiting write,
-	   give lock */
-	// todo: set lock x (reason: access vars is_locked_write, is_waiting_write)
-	if(range_in_rotation(newitem)&&(!is_locked_write)&&(!is_waiting_write)){
-      	list_add_tail(&newitem->node, &assigned_reads.node);
-      	// todo: unset lock x
-		return 0;
-	}
-
-	/* If it cannot be assigned, add it to wait and  make thread sleep */
-	list_add_tail(&newitem->node, &waiting_locks.node);	
-	// todo: unset lock x
-	// todo: make it sleep
-
-	return 0;
+	if(check_param(degree, range) == 0)
+		return -EINVAL;
 	
-}
-
-int do_rotlock_write(int degree, int range)
-{
-	/* check if degree and range is correct */
-	if(degree < 0 || degree > 360){
-		printk("DEBUG: error: degree out of range\n");
-		return -1;
-	}
-	if(range < 0 || range > 360){
-		printk("DEBUG: error: range out of range\n");
-		return -1;
-	}
-	// todo: error checking
-
-	/* make a new range_desc to hold lock info */
 	struct range_desc* newitem =
 		(struct range_desc*) kmalloc(sizeof(struct range_desc), GFP_KERNEL);
-	if(newitem == NULL)
+	if(newitem == NULL) {
+		printk("DEBUG: kernel has no memory\n");
 		return -ENOMEM;
+	}
 
-	newitem->type = WRITE_LOCK_FLAG;
+	newitem->type = lock_flag;
 	newitem->degree = degree;
 	newitem->range = range;
 	newitem->tid = task_pid_vnr(current);
 	INIT_LIST_HEAD(&newitem->node);
 
-	/* Make it sleep, put it into waiting list.
-	 * If device lock is in newitem's range, call A */
-	// todo: make it sleep
-	// todo: set lock x 
-	list_add_tail(&newitem->node, &waiting_locks.node);
+	list_add_tail(&newitem->node, &waiting_locks.node);	
 	if(range_in_rotation(newitem))
-      	A();	
-	// todo: unset lock x
+		A();
+
+	/* this sleep implementation prevents concurrency issues
+	 * see: http://www.linuxjournal.com/article/8144 */
+	// TODO: grab lock while accessing newitem
+	set_current_state(TASK_INTERRUPTIBLE);
+	while(newitem->assigned) {
+		schedule();
+		set_current_state(TASK_INTERRUPTIBLE);
+	}
+	__set_current_state(TASK_RUNNING);
 
 	return 0;
 	
@@ -255,6 +214,8 @@ int do_rotunlock_write(int degree, int range)
 
 int do_set_rotation(int degree)
 {	
+	if(degree < 0 || degree >= 360)
+		return -EINVAL;
 	/* update device rotation info */
 	device_rot = degree;
 	/* call A */
@@ -272,12 +233,12 @@ SYSCALL_DEFINE1(set_rotation, int, degree)
 
 SYSCALL_DEFINE2(rotlock_read, int, degree, int, range)
 {
-	return do_rotlock_read(degree, range);
+	return do_rotlock(degree, range, READ_LOCK_FLAG);
 }
 
 SYSCALL_DEFINE2(rotlock_write, int, degree, int, range)
 {
-	return do_rotlock_write(degree, range);
+	return do_rotlock(degree, range, WRITE_LOCK_FLAG);
 }
 
 SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range)
@@ -291,3 +252,19 @@ SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range)
 	return 0;
 	//return do_rotunlock_write(degree, range);
 }
+
+/* implementation of common functions */
+static inline int check_param(int degree, int range)
+{
+	/* check if degree and range is correct */
+	if(degree < 0 || degree >= 360){
+		printk("DEBUG: error: degree out of range\n");
+		return 0;
+	}
+	if(range <= 0 || range >= 180){
+		printk("DEBUG: error: range out of range\n");
+		return 0;
+	}
+	return 1;
+}
+
