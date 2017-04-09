@@ -85,7 +85,7 @@ int A() /* always use with lock x */
 	list_for_each_entry(pos, &waiting_reads.node, node){
 		if(range_in_rotation(pos)){
 			int is_overlap_w_write = 0;
-			list_for_each_entry(temp, &assigned_reads.node, node){
+			list_for_each_entry(temp, &assigned_writes.node, node){
 				if(range_overlap(pos, temp)){
 					is_overlap_w_write = 1;
 					break;
