@@ -124,13 +124,14 @@ int do_rotlock(int degree, int range, char lock_flag, struct range_desc *head)
 	newitem->assigned = 0;
 	INIT_LIST_HEAD(&newitem->node);
 
+	// TODO: grab lock x 
 	list_add_tail(&newitem->node, &head->node);	
 	if(range_in_rotation(newitem))
 		A();
 
 	/* this sleep implementation prevents concurrency issues
 	 * see: http://www.linuxjournal.com/article/8144 */
-	// TODO: grab lock while accessing newitem
+	// TODO: release lock x
 	set_current_state(TASK_INTERRUPTIBLE);
 	while(!newitem->assigned) {
 		schedule();
