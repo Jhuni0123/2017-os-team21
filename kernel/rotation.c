@@ -4,11 +4,13 @@
 #include <linux/sched.h>
 #include <linux/errno.h>
 #include <linux/syscalls.h>
+#include <linux/mutex.h>
 
 #define INITIAL_ROT 0
 
 int device_rot = INITIAL_ROT;
-int range_desc_init = 0;
+
+DEFINE_MUTEX(rotlock_mutex);
 
 struct range_desc waiting_reads = RANGE_DESC_INIT(waiting_reads);
 struct range_desc waiting_writes = RANGE_DESC_INIT(waiting_writes);
@@ -120,13 +122,14 @@ int do_rotlock(int degree, int range, enum rw_flag flag, struct range_desc *head
 	newitem->assigned = 0;
 	INIT_LIST_HEAD(&newitem->node);
 
-	// TODO: grab lock x
+	mutex_lock(&rotlock_mutex);
+
 	list_add_tail(&newitem->node, &head->node);
 
 	if(range_in_rotation(newitem))
 		reassign_rotlock();
-	// TODO: release lock x
 
+	mutex_unlock(&rotlock_mutex);
 
 	/* this sleep implementation prevents concurrency issues
 	 * see: http://www.linuxjournal.com/article/8144 */
@@ -150,7 +153,8 @@ int do_rotunlock(int degree, int range, enum rw_flag flag, struct range_desc* he
 	pid_t tid = task_pid_vnr(current);
 	struct range_desc *curr;
 
-	// TODO: set lock x
+	mutex_lock(&rotlock_mutex);
+
 	list_for_each_entry(curr, &head->node, node) {
 		if(curr->tid == tid && curr->degree == degree && curr->range == range)
 			break;
@@ -158,7 +162,7 @@ int do_rotunlock(int degree, int range, enum rw_flag flag, struct range_desc* he
 
 	if(curr == head) {	/* this is true only if iteration is finished */
 		printk("DEBUG: error: no match for rotunlock_read\n");
-		// TODO: unset lock x
+		mutex_unlock(&rotlock_mutex);
 		return -EINVAL;
 	}
 
@@ -167,7 +171,8 @@ int do_rotunlock(int degree, int range, enum rw_flag flag, struct range_desc* he
 	kfree(curr);
 
 	reassign_rotlock();
-	// TODO: unset lock x
+
+	mutex_unlock(&rotlock_mutex);
 
 	return 0;
 
@@ -180,11 +185,14 @@ int do_set_rotation(int degree)
 	if(!degree_valid(degree))
 		return -EINVAL;
 
-	// TODO: set lock x
+	mutex_lock(&rotlock_mutex);
+
 	device_rot = degree;
 
 	result = reassign_rotlock();
-	// TODO: unset lock x
+
+	mutex_unlock(&rotlock_mutex);
+
 	return result;
 }
 
