@@ -19,6 +19,15 @@ struct range_desc assigned_writes = RANGE_DESC_INIT(assigned_writes);
 static inline bool range_valid(int range);
 static inline bool degree_valid(int degree);
 
+static void print_range_desc_list(struct range_desc *list){
+	struct range_desc *pos;
+	printk("DEBUG: head");
+	list_for_each_entry(pos, &list->node, node) {
+		printk("->(%s,%d,%d)", pos->type == READ_FLAG ? "READ" : "WRITE", pos->degree, pos->range);
+	}
+	printk("\n");
+}
+
 int reassign_rotlock() /* always use with lock x */
 {
 	/* declare variable */
@@ -62,11 +71,13 @@ int reassign_rotlock() /* always use with lock x */
 			}
 		}
 	}
+
 	/* If there is no waiting write lock,
 	 * allocate all waiting read locks in correct range
 	 * that do not overlap with assigned write locks */
 	struct range_desc *temp = NULL;
-	list_for_each_entry(pos, &waiting_reads.node, node){
+	struct range_desc *safe_tmp;
+	list_for_each_entry_safe(pos, safe_tmp, &waiting_reads.node, node){
 		if(range_in_rotation(pos)){
 			int is_overlap_w_write = 0;
 			list_for_each_entry(temp, &assigned_writes.node, node){
@@ -116,6 +127,7 @@ int do_rotlock(int degree, int range, enum rw_flag flag, struct range_desc *head
 		reassign_rotlock();
 	// TODO: release lock x
 
+
 	/* this sleep implementation prevents concurrency issues
 	 * see: http://www.linuxjournal.com/article/8144 */
 	set_current_state(TASK_INTERRUPTIBLE);
@@ -140,7 +152,7 @@ int do_rotunlock(int degree, int range, enum rw_flag flag, struct range_desc* he
 
 	// TODO: set lock x
 	list_for_each_entry(curr, &head->node, node) {
-		if((curr->degree == degree)&&(curr->range == range)&&(curr->type == flag)&&(curr->tid == tid))
+		if(curr->tid == tid && curr->degree == degree && curr->range == range)
 			break;
 	}
 
