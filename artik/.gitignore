@@ -1,5 +1,6 @@
 *.o
 selector
 trial
+rotd
 test
 integer
