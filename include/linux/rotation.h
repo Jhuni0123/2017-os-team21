@@ -39,6 +39,8 @@ extern struct range_desc waiting_writes;
 extern struct range_desc assigned_reads;
 extern struct range_desc assigned_writes;
 
+extern void exit_rotlock();
+
 /* rotation utility functions */
 static int range_in_rotation(struct range_desc* rd)
 {

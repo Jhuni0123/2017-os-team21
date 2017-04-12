@@ -231,3 +231,38 @@ static inline bool degree_valid(int degree)
 {
 	return 0 <= degree && degree < 360;
 }
+
+void exit_rotlock(){
+    pid_t tid = task_pid_vnr(current);
+    struct range_desc *pos, *tmp;
+
+	mutex_lock(&rotlock_mutex);
+
+    list_for_each_entry_safe(pos, tmp, &waiting_reads.node, node){
+        if(pos->tid == tid){
+            list_del(&pos->node);
+            kfree(pos);
+        }
+    }
+    list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node){
+        if(pos->tid == tid){
+            list_del(&pos->node);
+            kfree(pos);
+        }
+    }
+    list_for_each_entry_safe(pos, tmp, &assigned_reads.node, node){
+        if(pos->tid == tid){
+            list_del(&pos->node);
+            kfree(pos);
+        }
+    }
+    list_for_each_entry_safe(pos, tmp, &assigned_reads.node, node){
+        if(pos->tid == tid){
+            list_del(&pos->node);
+            kfree(pos);
+        }
+    }
+
+    mutex_unlock(&rotlock_mutex);
+}
+

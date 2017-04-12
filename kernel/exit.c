@@ -53,6 +53,7 @@
 #include <linux/oom.h>
 #include <linux/writeback.h>
 #include <linux/shm.h>
+#include <linux/rotation.h>
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
@@ -808,6 +809,8 @@ void do_exit(long code)
 	exit_task_work(tsk);
 	check_stack_usage();
 	exit_thread();
+
+    exit_rotlock();
 
 	/*
 	 * Flush inherited counters to the parent - before the parent
