@@ -5,8 +5,20 @@
 #include <linux/list.h>
 #include <linux/sched.h>
 
-#define READ_LOCK_FLAG 0
-#define WRITE_LOCK_FLAG 1
+enum rw_flag {
+    READ_FLAG,
+    WRITE_FLAG
+};
+
+#define RANGE_DESC_INIT(name) { \
+    .degree = -1,   \
+    .range = -1,    \
+    .tid = -1,      \
+    .task = NULL,   \
+    .type = -1,     \
+    .assigned = -1, \
+    .node = { &(name.node), &(name.node) } \
+}
 
 extern int device_rot;
 
@@ -16,7 +28,7 @@ struct range_desc
 	int range;
 	pid_t tid;
 	struct task_struct* task;
-	char type;
+	enum rw_flag type;
 	char assigned;
 	struct list_head node;
 };
