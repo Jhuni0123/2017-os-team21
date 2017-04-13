@@ -6,18 +6,18 @@
 #include <linux/sched.h>
 
 enum rw_flag {
-    READ_FLAG,
-    WRITE_FLAG
+	READ_FLAG,
+	WRITE_FLAG
 };
 
 #define RANGE_DESC_INIT(name) { \
-    .degree = -1,   \
-    .range = -1,    \
-    .tid = -1,      \
-    .task = NULL,   \
-    .type = -1,     \
-    .assigned = -1, \
-    .node = { &(name.node), &(name.node) } \
+	.degree = -1, \
+	.range = -1, \
+	.tid = -1, \
+	.task = NULL, \
+	.type = -1, \
+	.assigned = false, \
+	.node = LIST_HEAD_INIT(name.node) \
 }
 
 extern int device_rot;
@@ -29,7 +29,7 @@ struct range_desc
 	pid_t tid;
 	struct task_struct* task;
 	enum rw_flag type;
-	char assigned;
+	bool assigned;
 	struct list_head node;
 };
 
@@ -39,37 +39,30 @@ extern struct range_desc waiting_writes;
 extern struct range_desc assigned_reads;
 extern struct range_desc assigned_writes;
 
-extern void exit_rotlock();
+extern void exit_rotlock(void);
 
 /* rotation utility functions */
-static int range_in_rotation(struct range_desc* rd)
+
+static inline bool rot_in_range(struct range_desc* rd)
 {
-	int low = rd->degree - rd->range;
-	int high = rd->degree + rd->range;
-	
-	int rot;
-	for(rot = device_rot - 360; rot <= device_rot + 360; rot += 360)
-		if(low <= rot && rot <= high)
-			return 1;
-	
-	return 0;
+	int dist = abs(device_rot - rd->degree);
+	return min(dist, 360 - dist) <= rd->range;
 }
 
-static int range_overlap(struct range_desc* rd1, struct range_desc* rd2)
+static bool range_overlap(struct range_desc* rd1, struct range_desc* rd2)
 {
-	int low1 = rd1->degree - rd1->range - 360;
-	int high1 = rd1->degree + rd1->range - 360;
-	int low2 = rd2->degree - rd2->range;
-	int high2 = rd2->degree + rd2->range;
+	int dist = abs(rd1->degree - rd2->degree);
+	return min(dist, 360 - dist) <= rd1->range + rd2->range;
+}
 
-	int cnt;
-	for(cnt = 0; cnt < 3; cnt++) {
-		if(low1 < high2 && low2 < high1)
-			return 1;
-		low1 += 360;
-		high1 += 360;
-	}
-	return 0;
+static inline bool range_valid(int range)
+{
+	return 0 < range && range < 180;
+}
+
+static inline bool degree_valid(int degree)
+{
+	return 0 <= degree && degree < 360;
 }
 
 #endif
