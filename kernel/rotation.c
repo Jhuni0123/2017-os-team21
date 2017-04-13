@@ -20,6 +20,8 @@ struct range_desc assigned_writes = RANGE_DESC_INIT(assigned_writes);
 /* common functions used by syscalls */
 static inline bool range_valid(int range);
 static inline bool degree_valid(int degree);
+inline bool rot_in_range(int rot, int degree, int range);
+void rotlock_assign(struct range_desc *lock, struct range_desc *assigned_list);
 
 static void print_range_desc_list(struct range_desc *list){
 	struct range_desc *pos;
@@ -32,73 +34,81 @@ static void print_range_desc_list(struct range_desc *list){
 
 int reassign_rotlock() /* always use with lock x */
 {
-	/* declare variable */
-	int result = 0;
-	/* check if there is a locked write lock
-	 * if there is already a writer lock holding the rotation
-	 * no more lock can be allocated: return 0 */
-	struct range_desc *pos = NULL;
+	struct range_desc *pos, *tmp;
+	int read_left, read_right;
+	int write_left, write_right;
+	bool write_assignable = true;
+
+	/* calculate range of assigned write lock */
+	write_left = device_rot - 360;
+	write_right = device_rot + 360;
+
 	list_for_each_entry(pos, &assigned_writes.node, node){
-		if(range_in_rotation(pos))
+		if(rot_in_range(device_rot, pos->degree, pos->range)) {
 			return 0;
+		}
+		int lo = pos->degree - pos->range;
+		int hi = pos->degree + pos->range;
+		if(lo < device_rot) lo += 360;
+		if(hi > device_rot) hi -= 360;
+		write_left = max(write_left, hi);
+		write_right = min(write_right, lo);
 	}
-	/* check if there is a write lock waiting to be allocated.
-	 * If there is, check if there is an allocated lock that overlaps with it.
-	 * If there is no overlapping allocated lock, assign that waiting write lock. */
-	list_for_each_entry(pos, &waiting_writes.node, node){
-		if(range_in_rotation(pos)){
-			int can_alloc_write = 1;
-			struct range_desc *temp = NULL;
-			list_for_each_entry(temp, &assigned_reads.node, node){
-				if(range_overlap(pos, temp)){
-					can_alloc_write = 0;
-					break;
+
+	/* calculate range of assigned read lock */
+	read_left = device_rot - 360;
+	read_right = device_rot + 360;
+
+	list_for_each_entry(pos, &assigned_reads.node, node){
+		if(rot_in_range(device_rot, pos->degree, pos->range)){
+			write_assignable = false;
+		}
+		int lo = pos->degree - pos->range;
+		int hi = pos->degree + pos->range;
+		if(lo < device_rot) lo += 360;
+		if(hi > device_rot) hi -= 360;
+		read_left = max(read_left, hi);
+		read_right = min(read_right, lo);
+	}
+
+	/* assign write lock */
+	if(write_assignable) {
+		list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node) {
+			if(rot_in_range(device_rot, pos->degree, pos->range)) {
+				int lo = pos->degree - pos->range;
+				int hi = pos->degree + pos->range;
+				if(lo > device_rot)
+					lo -= 360;
+				if(hi < device_rot)
+					hi += 360;
+				if(read_left < lo && hi < read_right && write_left < lo && hi < write_right) { /* assignable */
+					rotlock_assign(pos, &assigned_writes);
+					return 1;
 				}
-			}
-			list_for_each_entry(temp, &assigned_writes.node, node){
-				if(range_overlap(pos, temp)){
-					can_alloc_write = 0;
-					break;
-				}
-			}
-			if(can_alloc_write){
-				list_del(&pos->node);
-				list_add_tail(&pos->node, &assigned_writes.node);
-				pos->assigned = 1;
-				if(pos->task != NULL)
-					wake_up_process(pos->task);
-				return 1;
-			} else {
 				return 0;
 			}
 		}
 	}
 
-	/* If there is no waiting write lock,
-	 * allocate all waiting read locks in correct range
-	 * that do not overlap with assigned write locks */
-	struct range_desc *temp = NULL;
-	struct range_desc *safe_tmp;
-	list_for_each_entry_safe(pos, safe_tmp, &waiting_reads.node, node){
-		if(range_in_rotation(pos)){
-			int is_overlap_w_write = 0;
-			list_for_each_entry(temp, &assigned_writes.node, node){
-				if(range_overlap(pos, temp)){
-					is_overlap_w_write = 1;
-					break;
-				}
-			}
-			if(!is_overlap_w_write){
-				list_del(&pos->node);
-				list_add_tail(&pos->node, &assigned_reads.node);
-				pos->assigned = 1;
-				if(pos->task != NULL)
-					wake_up_process(pos->task);
-				result++;
+	/* assign read lock */
+	int count = 0;
+
+	list_for_each_entry_safe(pos, tmp, &waiting_reads.node, node) {
+		if(rot_in_range(device_rot, pos->degree, pos->range)) {
+			int lo = pos->degree - pos->range;
+			int hi = pos->degree + pos->range;
+			if(lo > device_rot)
+				lo -= 360;
+			if(hi < device_rot)
+				hi += 360;
+			if(write_left < lo && hi < write_right) {
+				rotlock_assign(pos, &assigned_reads);
+				count++;
 			}
 		}
 	}
-	return result;
+
+	return count;
 }
 
 int do_rotlock(int degree, int range, enum rw_flag flag, struct range_desc *head)
@@ -233,36 +243,50 @@ static inline bool degree_valid(int degree)
 }
 
 void exit_rotlock(){
-    pid_t tid = task_pid_vnr(current);
-    struct range_desc *pos, *tmp;
+	pid_t tid = task_pid_vnr(current);
+	struct range_desc *pos, *tmp;
 
 	mutex_lock(&rotlock_mutex);
 
-    list_for_each_entry_safe(pos, tmp, &waiting_reads.node, node){
-        if(pos->tid == tid){
-            list_del(&pos->node);
-            kfree(pos);
-        }
-    }
-    list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node){
-        if(pos->tid == tid){
-            list_del(&pos->node);
-            kfree(pos);
-        }
-    }
-    list_for_each_entry_safe(pos, tmp, &assigned_reads.node, node){
-        if(pos->tid == tid){
-            list_del(&pos->node);
-            kfree(pos);
-        }
-    }
-    list_for_each_entry_safe(pos, tmp, &assigned_reads.node, node){
-        if(pos->tid == tid){
-            list_del(&pos->node);
-            kfree(pos);
-        }
-    }
+	list_for_each_entry_safe(pos, tmp, &waiting_reads.node, node){
+		if(pos->tid == tid){
+			list_del(&pos->node);
+			kfree(pos);
+		}
+	}
+	list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node){
+		if(pos->tid == tid){
+			list_del(&pos->node);
+			kfree(pos);
+		}
+	}
+	list_for_each_entry_safe(pos, tmp, &assigned_reads.node, node){
+		if(pos->tid == tid){
+			list_del(&pos->node);
+			kfree(pos);
+		}
+	}
+	list_for_each_entry_safe(pos, tmp, &assigned_reads.node, node){
+		if(pos->tid == tid){
+			list_del(&pos->node);
+			kfree(pos);
+		}
+	}
 
-    mutex_unlock(&rotlock_mutex);
+	mutex_unlock(&rotlock_mutex);
 }
 
+inline bool rot_in_range(int rot, int degree, int range)
+{
+	int dist = abs(rot - degree);
+	return (dist < 360 - dist ? dist : 360 - dist) <= range;
+}
+
+void rotlock_assign(struct range_desc *lock, struct range_desc *assigned_list)
+{
+	list_del(&lock->node);
+	list_add_tail(&lock->node, &assigned_list->node);
+	lock->assigned = 1;
+	if(lock->task != NULL)
+		wake_up_process(lock->task);
+}
