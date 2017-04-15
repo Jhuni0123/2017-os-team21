@@ -18,96 +18,108 @@ struct range_desc assigned_reads = RANGE_DESC_INIT(assigned_reads);
 struct range_desc assigned_writes = RANGE_DESC_INIT(assigned_writes);
 
 /* common functions used by syscalls */
-static inline bool range_valid(int range);
-static inline bool degree_valid(int degree);
+void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list);
+int reassign_rotlock(void);
 
 static void print_range_desc_list(struct range_desc *list){
 	struct range_desc *pos;
-	printk("DEBUG: head");
+	printk("head");
 	list_for_each_entry(pos, &list->node, node) {
 		printk("->(%s,%d,%d)", pos->type == READ_FLAG ? "READ" : "WRITE", pos->degree, pos->range);
 	}
 	printk("\n");
 }
 
-int reassign_rotlock() /* always use with lock x */
+int reassign_rotlock(void) /* always use with lock x */
 {
-	/* declare variable */
-	int result = 0;
-	/* check if there is a locked write lock
-	 * if there is already a writer lock holding the rotation
-	 * no more lock can be allocated: return 0 */
-	struct range_desc *pos = NULL;
+	struct range_desc *pos, *tmp;
+	int read_left, read_right;
+	int write_left, write_right;
+	bool write_assignable = true;
+
+	int lo, hi;
+	int count = 0;
+
+	/* calculate range of assigned write lock */
+	write_left = device_rot - 360;
+	write_right = device_rot + 360;
+
 	list_for_each_entry(pos, &assigned_writes.node, node){
-		if(range_in_rotation(pos))
-			return 0;
+		if(rot_in_range(pos)) {
+			return count;
+		}
+		lo = pos->degree - pos->range;
+		hi = pos->degree + pos->range;
+		if(lo < device_rot) lo += 360;
+		if(hi > device_rot) hi -= 360;
+		write_left = max(write_left, hi);
+		write_right = min(write_right, lo);
 	}
-	/* check if there is a write lock waiting to be allocated.
-	 * If there is, check if there is an allocated lock that overlaps with it.
-	 * If there is no overlapping allocated lock, assign that waiting write lock. */
-	list_for_each_entry(pos, &waiting_writes.node, node){
-		if(range_in_rotation(pos)){
-			int can_alloc_write = 1;
-			struct range_desc *temp = NULL;
-			list_for_each_entry(temp, &assigned_reads.node, node){
-				if(range_overlap(pos, temp)){
-					can_alloc_write = 0;
-					break;
+
+	/* calculate range of assigned read lock */
+	read_left = device_rot - 360;
+	read_right = device_rot + 360;
+
+	list_for_each_entry(pos, &assigned_reads.node, node){
+		if(rot_in_range(pos)){
+			write_assignable = false;
+		}
+		lo = pos->degree - pos->range;
+		hi = pos->degree + pos->range;
+		if(lo < device_rot) lo += 360;
+		if(hi > device_rot) hi -= 360;
+		read_left = max(read_left, hi);
+		read_right = min(read_right, lo);
+	}
+
+	/* assign write lock */
+	if(write_assignable) {
+		list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node) {
+			if(rot_in_range(pos)) {
+				lo = pos->degree - pos->range;
+				hi = pos->degree + pos->range;
+				if(lo > device_rot)
+					lo -= 360;
+				if(hi < device_rot)
+					hi += 360;
+				if(read_left < lo && hi < read_right && write_left < lo && hi < write_right) { /* assignable */
+					assign_rotlock(pos, &assigned_writes);
+					count++;
 				}
-			}
-			list_for_each_entry(temp, &assigned_writes.node, node){
-				if(range_overlap(pos, temp)){
-					can_alloc_write = 0;
-					break;
-				}
-			}
-			if(can_alloc_write){
-				list_del(&pos->node);
-				list_add_tail(&pos->node, &assigned_writes.node);
-				pos->assigned = 1;
-				if(pos->task != NULL)
-					wake_up_process(pos->task);
-				return 1;
-			} else {
-				return 0;
+				return count;
 			}
 		}
 	}
 
-	/* If there is no waiting write lock,
-	 * allocate all waiting read locks in correct range
-	 * that do not overlap with assigned write locks */
-	struct range_desc *temp = NULL;
-	struct range_desc *safe_tmp;
-	list_for_each_entry_safe(pos, safe_tmp, &waiting_reads.node, node){
-		if(range_in_rotation(pos)){
-			int is_overlap_w_write = 0;
-			list_for_each_entry(temp, &assigned_writes.node, node){
-				if(range_overlap(pos, temp)){
-					is_overlap_w_write = 1;
-					break;
-				}
-			}
-			if(!is_overlap_w_write){
-				list_del(&pos->node);
-				list_add_tail(&pos->node, &assigned_reads.node);
-				pos->assigned = 1;
-				if(pos->task != NULL)
-					wake_up_process(pos->task);
-				result++;
+	/* assign read lock */
+	count = 0;
+
+	list_for_each_entry_safe(pos, tmp, &waiting_reads.node, node) {
+		if(rot_in_range(pos)) {
+			lo = pos->degree - pos->range;
+			hi = pos->degree + pos->range;
+			if(lo > device_rot)
+				lo -= 360;
+			if(hi < device_rot)
+				hi += 360;
+			if(write_left < lo && hi < write_right) {
+				assign_rotlock(pos, &assigned_reads);
+				count++;
 			}
 		}
 	}
-	return result;
+
+	return count;
 }
 
 int do_rotlock(int degree, int range, enum rw_flag flag, struct range_desc *head)
 {
+	struct range_desc *newitem;
+
 	if(!degree_valid(degree) || !range_valid(range))
 		return -EINVAL;
 
-	struct range_desc* newitem =
-		(struct range_desc*) kmalloc(sizeof(struct range_desc), GFP_KERNEL);
+	newitem = (struct range_desc*) kmalloc(sizeof(struct range_desc), GFP_KERNEL);
 
 	if(newitem == NULL) {
 		printk("DEBUG: kernel has no memory\n");
@@ -119,14 +131,14 @@ int do_rotlock(int degree, int range, enum rw_flag flag, struct range_desc *head
 	newitem->tid = task_pid_vnr(current);
 	newitem->task = current;
 	newitem->type = flag;
-	newitem->assigned = 0;
+	newitem->assigned = false;
 	INIT_LIST_HEAD(&newitem->node);
 
 	mutex_lock(&rotlock_mutex);
 
 	list_add_tail(&newitem->node, &head->node);
 
-	if(range_in_rotation(newitem))
+	if(rot_in_range(newitem))
 		reassign_rotlock();
 
 	mutex_unlock(&rotlock_mutex);
@@ -146,12 +158,14 @@ int do_rotlock(int degree, int range, enum rw_flag flag, struct range_desc *head
 
 int do_rotunlock(int degree, int range, enum rw_flag flag, struct range_desc* head)
 {
+	pid_t tid;
+	struct range_desc *curr;
+
 	if(!degree_valid(degree) || !range_valid(range))
 		return -EINVAL;
 
 	/* find that exact lock */
-	pid_t tid = task_pid_vnr(current);
-	struct range_desc *curr;
+	tid = task_pid_vnr(current);
 
 	mutex_lock(&rotlock_mutex);
 
@@ -188,14 +202,21 @@ int do_set_rotation(int degree)
 	mutex_lock(&rotlock_mutex);
 
 	device_rot = degree;
-
 	result = reassign_rotlock();
+	printk("DEBUG: SET ROTATION %d\n", device_rot);
+	printk("DEBUG: WAIT     READ : ");
+	print_range_desc_list(&waiting_reads);
+	printk("DEBUG: WAIT     WRITE: ");
+	print_range_desc_list(&waiting_writes);
+	printk("DEBUG: ASSIGNED READ : ");
+	print_range_desc_list(&assigned_reads);
+	printk("DEBUG: ASSIGNED WRITE: ");
+	print_range_desc_list(&assigned_writes);
 
 	mutex_unlock(&rotlock_mutex);
 
 	return result;
 }
-
 
 SYSCALL_DEFINE1(set_rotation, int, degree)
 {
@@ -222,12 +243,48 @@ SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range)
 	return do_rotunlock(degree, range, WRITE_FLAG, &assigned_writes);
 }
 
-static inline bool range_valid(int range)
-{
-	return 0 < range && range < 180;
+void exit_rotlock(){
+	pid_t tid = task_pid_vnr(current);
+	struct range_desc *pos, *tmp;
+	mutex_lock(&rotlock_mutex);
+
+	list_for_each_entry_safe(pos, tmp, &waiting_reads.node, node){
+		if(pos->tid == tid){
+			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
+			list_del(&pos->node);
+			kfree(pos);
+		}
+	}
+	list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node){
+		if(pos->tid == tid){
+			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
+			list_del(&pos->node);
+			kfree(pos);
+		}
+	}
+	list_for_each_entry_safe(pos, tmp, &assigned_reads.node, node){
+		if(pos->tid == tid){
+			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
+			list_del(&pos->node);
+			kfree(pos);
+		}
+	}
+	list_for_each_entry_safe(pos, tmp, &assigned_writes.node, node){
+		if(pos->tid == tid){
+			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
+			list_del(&pos->node);
+			kfree(pos);
+		}
+	}
+
+	mutex_unlock(&rotlock_mutex);
 }
 
-static inline bool degree_valid(int degree)
+void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list)
 {
-	return 0 <= degree && degree < 360;
+	list_del(&lock->node);
+	list_add_tail(&lock->node, &assigned_list->node);
+	lock->assigned = true;
+	if(lock->task != NULL)
+		wake_up_process(lock->task);
 }
