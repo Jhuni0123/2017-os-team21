@@ -18,6 +18,7 @@ struct range_desc assigned_reads = RANGE_DESC_INIT(assigned_reads);
 struct range_desc assigned_writes = RANGE_DESC_INIT(assigned_writes);
 
 /* common functions used by syscalls */
+int remove_rotlocks_by_tid(struct range_desc *list, int tid);
 void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list);
 int find_assign_rotlock(void);
 
@@ -73,21 +74,22 @@ int find_assign_rotlock(void)
 	}
 
 	/* assign write lock */
-	if(write_assignable) {
-		list_for_each_entry(pos, &waiting_writes.node, node) {
-			if(rot_in_range(pos)) {
-				lo = pos->degree - pos->range;
-				hi = pos->degree + pos->range;
-				if(lo > device_rot)
-					lo -= 360;
-				if(hi < device_rot)
-					hi += 360;
-				if(read_left < lo && hi < read_right && write_left < lo && hi < write_right) { /* assignable */
-					assign_rotlock(pos, &assigned_writes);
-					count++;
-					return count;
-				}
+	list_for_each_entry(pos, &waiting_writes.node, node) {
+		if(rot_in_range(pos)) {
+			if(!write_assignable) {
+				return count;
 			}
+			lo = pos->degree - pos->range;
+			hi = pos->degree + pos->range;
+			if(lo > device_rot)
+				lo -= 360;
+			if(hi < device_rot)
+				hi += 360;
+			if(read_left < lo && hi < read_right && write_left < lo && hi < write_right) { /* assignable */
+				assign_rotlock(pos, &assigned_writes);
+				count++;
+			}
+			return count;
 		}
 	}
 
@@ -205,7 +207,7 @@ int do_set_rotation(int degree)
 		return -EINVAL;
 
 	mutex_lock(&rotlock_mutex);
-	
+
 	device_rot = degree;
 	result = find_assign_rotlock();
 	printk("DEBUG: SET ROTATION %d\n", device_rot);
@@ -220,6 +222,40 @@ int do_set_rotation(int degree)
 
 	mutex_unlock(&rotlock_mutex);
 	return result;
+}
+
+void exit_rotlock(void)
+{
+	pid_t tid = task_pid_vnr(current);
+	int removed = 0;
+
+	mutex_lock(&rotlock_mutex);
+
+	removed += remove_rotlocks_by_tid(&waiting_reads, tid);
+	removed += remove_rotlocks_by_tid(&waiting_writes, tid);
+	removed += remove_rotlocks_by_tid(&assigned_reads, tid);
+	removed += remove_rotlocks_by_tid(&assigned_writes, tid);
+
+	if(removed)
+		find_assign_rotlock();
+
+	mutex_unlock(&rotlock_mutex);
+}
+
+int remove_rotlocks_by_tid(struct range_desc *list, int tid)
+{
+	struct range_desc *pos, *tmp;
+	int count = 0;
+
+	list_for_each_entry_safe(pos, tmp, &list->node, node){
+		if(pos->tid == tid) {
+			pos->task = NULL;
+			list_del(&pos->node);
+			kfree(pos);
+			count++;
+		}
+	}
+	return count;
 }
 
 SYSCALL_DEFINE1(set_rotation, int, degree)
@@ -246,45 +282,3 @@ SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range)
 {
 	return do_rotunlock(degree, range, &assigned_writes);
 }
-
-void exit_rotlock(){
-	if(current->rotlock_count == 0)
-		return;
-	
-	pid_t tid = task_pid_vnr(current);
-	struct range_desc *pos, *tmp;
-	mutex_lock(&rotlock_mutex);
-	
-	list_for_each_entry_safe(pos, tmp, &assigned_writes.node, node){
-		if(pos->tid == tid){
-			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
-			list_del(&pos->node);
-			kfree(pos);
-		}
-	}
-	list_for_each_entry_safe(pos, tmp, &assigned_reads.node, node){
-		if(pos->tid == tid){
-			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
-			list_del(&pos->node);
-			kfree(pos);
-		}
-	}
-	list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node){
-		if(pos->tid == tid){
-			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
-			list_del(&pos->node);
-			kfree(pos);
-		}
-	}
-	list_for_each_entry_safe(pos, tmp, &waiting_reads.node, node){
-		if(pos->tid == tid){
-			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
-			list_del(&pos->node);
-			kfree(pos);
-		}
-	}
-	
-	mutex_unlock(&rotlock_mutex);
-	return;
-}
-
