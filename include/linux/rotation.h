@@ -5,17 +5,11 @@
 #include <linux/list.h>
 #include <linux/sched.h>
 
-enum rw_flag {
-	READ_FLAG,
-	WRITE_FLAG
-};
-
 #define RANGE_DESC_INIT(name) { \
 	.degree = -1, \
 	.range = -1, \
 	.tid = -1, \
 	.task = NULL, \
-	.type = -1, \
 	.assigned = false, \
 	.node = LIST_HEAD_INIT(name.node) \
 }
@@ -28,7 +22,6 @@ struct range_desc
 	int range;
 	pid_t tid;
 	struct task_struct* task;
-	enum rw_flag type;
 	bool assigned;
 	struct list_head node;
 };
