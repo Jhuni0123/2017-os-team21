@@ -252,6 +252,7 @@ int remove_rotlocks_by_tid(struct range_desc *list, int tid)
 
 	list_for_each_entry_safe(pos, tmp, &list->node, node){
 		if(pos->tid == tid) {
+			pos->task = NULL;
 			list_del(&pos->node);
 			kfree(pos);
 			count++;
