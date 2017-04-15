@@ -18,6 +18,7 @@ struct range_desc assigned_reads = RANGE_DESC_INIT(assigned_reads);
 struct range_desc assigned_writes = RANGE_DESC_INIT(assigned_writes);
 
 /* common functions used by syscalls */
+int remove_rotlocks_by_tid(struct range_desc *list, int tid);
 void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list);
 int reassign_rotlock(void);
 
@@ -73,21 +74,22 @@ int reassign_rotlock(void) /* always use with lock x */
 	}
 
 	/* assign write lock */
-	if(write_assignable) {
-		list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node) {
-			if(rot_in_range(pos)) {
-				lo = pos->degree - pos->range;
-				hi = pos->degree + pos->range;
-				if(lo > device_rot)
-					lo -= 360;
-				if(hi < device_rot)
-					hi += 360;
-				if(read_left < lo && hi < read_right && write_left < lo && hi < write_right) { /* assignable */
-					assign_rotlock(pos, &assigned_writes);
-					count++;
-				}
+	list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node) {
+		if(rot_in_range(pos)) {
+			if(!write_assignable) {
 				return count;
 			}
+			lo = pos->degree - pos->range;
+			hi = pos->degree + pos->range;
+			if(lo > device_rot)
+				lo -= 360;
+			if(hi < device_rot)
+				hi += 360;
+			if(read_left < lo && hi < read_right && write_left < lo && hi < write_right) { /* assignable */
+				assign_rotlock(pos, &assigned_writes);
+				count++;
+			}
+			return count;
 		}
 	}
 
@@ -153,7 +155,6 @@ int do_rotlock(int degree, int range, enum rw_flag flag, struct range_desc *head
 	__set_current_state(TASK_RUNNING);
 
 	return 0;
-
 }
 
 int do_rotunlock(int degree, int range, enum rw_flag flag, struct range_desc* head)
@@ -189,7 +190,6 @@ int do_rotunlock(int degree, int range, enum rw_flag flag, struct range_desc* he
 	mutex_unlock(&rotlock_mutex);
 
 	return 0;
-
 }
 
 int do_set_rotation(int degree)
@@ -218,6 +218,49 @@ int do_set_rotation(int degree)
 	return result;
 }
 
+void exit_rotlock(void)
+{
+	pid_t tid = task_pid_vnr(current);
+	int removed = 0;
+
+	mutex_lock(&rotlock_mutex);
+
+	removed += remove_rotlocks_by_tid(&waiting_reads, tid);
+	removed += remove_rotlocks_by_tid(&waiting_writes, tid);
+	removed += remove_rotlocks_by_tid(&assigned_reads, tid);
+	removed += remove_rotlocks_by_tid(&assigned_writes, tid);
+
+	if(removed)
+		reassign_rotlock();
+
+	mutex_unlock(&rotlock_mutex);
+}
+
+void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list)
+{
+	list_del(&lock->node);
+	list_add_tail(&lock->node, &assigned_list->node);
+	lock->assigned = true;
+	if(lock->task != NULL)
+		wake_up_process(lock->task);
+}
+
+int remove_rotlocks_by_tid(struct range_desc *list, int tid)
+{
+	struct range_desc *pos, *tmp;
+	int count = 0;
+
+	list_for_each_entry_safe(pos, tmp, &list->node, node){
+		if(pos->tid == tid) {
+			pos->task = NULL;
+			list_del(&pos->node);
+			kfree(pos);
+			count++;
+		}
+	}
+	return count;
+}
+
 SYSCALL_DEFINE1(set_rotation, int, degree)
 {
 	return do_set_rotation(degree);
@@ -241,54 +284,4 @@ SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range)
 SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range)
 {
 	return do_rotunlock(degree, range, WRITE_FLAG, &assigned_writes);
-}
-
-void exit_rotlock(){
-	pid_t tid = task_pid_vnr(current);
-	struct range_desc *pos, *tmp;
-	mutex_lock(&rotlock_mutex);
-
-	list_for_each_entry_safe(pos, tmp, &waiting_reads.node, node){
-		if(pos->tid == tid){
-			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
-			pos->task = NULL;
-			list_del(&pos->node);
-			kfree(pos);
-		}
-	}
-	list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node){
-		if(pos->tid == tid){
-			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
-			pos->task = NULL;
-			list_del(&pos->node);
-			kfree(pos);
-		}
-	}
-	list_for_each_entry_safe(pos, tmp, &assigned_reads.node, node){
-		if(pos->tid == tid){
-			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
-			pos->task = NULL;
-			list_del(&pos->node);
-			kfree(pos);
-		}
-	}
-	list_for_each_entry_safe(pos, tmp, &assigned_writes.node, node){
-		if(pos->tid == tid){
-			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
-			pos->task = NULL;
-			list_del(&pos->node);
-			kfree(pos);
-		}
-	}
-
-	mutex_unlock(&rotlock_mutex);
-}
-
-void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list)
-{
-	list_del(&lock->node);
-	list_add_tail(&lock->node, &assigned_list->node);
-	lock->assigned = true;
-	if(lock->task != NULL)
-		wake_up_process(lock->task);
 }
