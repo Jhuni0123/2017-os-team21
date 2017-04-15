@@ -1190,6 +1190,9 @@ struct task_struct {
 	struct pid_link pids[PIDTYPE_MAX];
 	struct list_head thread_group;
 	struct list_head thread_node;
+	
+	/* number of rotation locks this task has */
+	unsigned rotlock_count;
 
 	struct completion *vfork_done;		/* for vfork() */
 	int __user *set_child_tid;		/* CLONE_CHILD_SETTID */

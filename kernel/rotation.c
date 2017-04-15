@@ -20,18 +20,18 @@ struct range_desc assigned_writes = RANGE_DESC_INIT(assigned_writes);
 /* common functions used by syscalls */
 int remove_rotlocks_by_tid(struct range_desc *list, int tid);
 void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list);
-int reassign_rotlock(void);
+int find_assign_rotlock(void);
 
 static void print_range_desc_list(struct range_desc *list){
 	struct range_desc *pos;
 	printk("head");
 	list_for_each_entry(pos, &list->node, node) {
-		printk("->(%s,%d,%d)", pos->type == READ_FLAG ? "READ" : "WRITE", pos->degree, pos->range);
+		printk("->(%d,%d)", pos->degree, pos->range);
 	}
 	printk("\n");
 }
 
-int reassign_rotlock(void) /* always use with lock x */
+int find_assign_rotlock(void)
 {
 	struct range_desc *pos, *tmp;
 	int read_left, read_right;
@@ -74,7 +74,7 @@ int reassign_rotlock(void) /* always use with lock x */
 	}
 
 	/* assign write lock */
-	list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node) {
+	list_for_each_entry(pos, &waiting_writes.node, node) {
 		if(rot_in_range(pos)) {
 			if(!write_assignable) {
 				return count;
@@ -114,7 +114,16 @@ int reassign_rotlock(void) /* always use with lock x */
 	return count;
 }
 
-int do_rotlock(int degree, int range, enum rw_flag flag, struct range_desc *head)
+void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list)
+{
+	list_del(&lock->node);
+	list_add_tail(&lock->node, &assigned_list->node);
+	lock->assigned = true;
+	if(lock->task != NULL)
+		wake_up_process(lock->task);
+}
+
+int do_rotlock(int degree, int range, struct range_desc *head)
 {
 	struct range_desc *newitem;
 
@@ -132,16 +141,14 @@ int do_rotlock(int degree, int range, enum rw_flag flag, struct range_desc *head
 	newitem->range = range;
 	newitem->tid = task_pid_vnr(current);
 	newitem->task = current;
-	newitem->type = flag;
 	newitem->assigned = false;
 	INIT_LIST_HEAD(&newitem->node);
 
 	mutex_lock(&rotlock_mutex);
-
 	list_add_tail(&newitem->node, &head->node);
 
 	if(rot_in_range(newitem))
-		reassign_rotlock();
+		find_assign_rotlock();
 
 	mutex_unlock(&rotlock_mutex);
 
@@ -154,10 +161,11 @@ int do_rotlock(int degree, int range, enum rw_flag flag, struct range_desc *head
 	}
 	__set_current_state(TASK_RUNNING);
 
+	current->rotlock_count++;
 	return 0;
 }
 
-int do_rotunlock(int degree, int range, enum rw_flag flag, struct range_desc* head)
+int do_rotunlock(int degree, int range, struct range_desc* head)
 {
 	pid_t tid;
 	struct range_desc *curr;
@@ -169,7 +177,6 @@ int do_rotunlock(int degree, int range, enum rw_flag flag, struct range_desc* he
 	tid = task_pid_vnr(current);
 
 	mutex_lock(&rotlock_mutex);
-
 	list_for_each_entry(curr, &head->node, node) {
 		if(curr->tid == tid && curr->degree == degree && curr->range == range)
 			break;
@@ -181,14 +188,14 @@ int do_rotunlock(int degree, int range, enum rw_flag flag, struct range_desc* he
 		return -EINVAL;
 	}
 
-	/* delete it from list. */
 	list_del(&curr->node);
 	kfree(curr);
 
-	reassign_rotlock();
+	find_assign_rotlock();
+
 
 	mutex_unlock(&rotlock_mutex);
-
+	current->rotlock_count--;
 	return 0;
 }
 
@@ -202,7 +209,7 @@ int do_set_rotation(int degree)
 	mutex_lock(&rotlock_mutex);
 
 	device_rot = degree;
-	result = reassign_rotlock();
+	result = find_assign_rotlock();
 	printk("DEBUG: SET ROTATION %d\n", device_rot);
 	printk("DEBUG: WAIT     READ : ");
 	print_range_desc_list(&waiting_reads);
@@ -214,7 +221,6 @@ int do_set_rotation(int degree)
 	print_range_desc_list(&assigned_writes);
 
 	mutex_unlock(&rotlock_mutex);
-
 	return result;
 }
 
@@ -231,18 +237,9 @@ void exit_rotlock(void)
 	removed += remove_rotlocks_by_tid(&assigned_writes, tid);
 
 	if(removed)
-		reassign_rotlock();
+		find_assign_rotlock();
 
 	mutex_unlock(&rotlock_mutex);
-}
-
-void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list)
-{
-	list_del(&lock->node);
-	list_add_tail(&lock->node, &assigned_list->node);
-	lock->assigned = true;
-	if(lock->task != NULL)
-		wake_up_process(lock->task);
 }
 
 int remove_rotlocks_by_tid(struct range_desc *list, int tid)
@@ -268,20 +265,20 @@ SYSCALL_DEFINE1(set_rotation, int, degree)
 
 SYSCALL_DEFINE2(rotlock_read, int, degree, int, range)
 {
-	return do_rotlock(degree, range, READ_FLAG, &waiting_reads);
+	return do_rotlock(degree, range, &waiting_reads);
 }
 
 SYSCALL_DEFINE2(rotlock_write, int, degree, int, range)
 {
-	return do_rotlock(degree, range, WRITE_FLAG, &waiting_writes);
+	return do_rotlock(degree, range, &waiting_writes);
 }
 
 SYSCALL_DEFINE2(rotunlock_read, int, degree, int, range)
 {
-	return do_rotunlock(degree, range, READ_FLAG, &assigned_reads);
+	return do_rotunlock(degree, range, &assigned_reads);
 }
 
 SYSCALL_DEFINE2(rotunlock_write, int, degree, int, range)
 {
-	return do_rotunlock(degree, range, WRITE_FLAG, &assigned_writes);
+	return do_rotunlock(degree, range, &assigned_writes);
 }
