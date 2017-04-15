@@ -251,6 +251,7 @@ void exit_rotlock(){
 	list_for_each_entry_safe(pos, tmp, &waiting_reads.node, node){
 		if(pos->tid == tid){
 			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
+			pos->task = NULL;
 			list_del(&pos->node);
 			kfree(pos);
 		}
@@ -258,6 +259,7 @@ void exit_rotlock(){
 	list_for_each_entry_safe(pos, tmp, &waiting_writes.node, node){
 		if(pos->tid == tid){
 			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
+			pos->task = NULL;
 			list_del(&pos->node);
 			kfree(pos);
 		}
@@ -265,6 +267,7 @@ void exit_rotlock(){
 	list_for_each_entry_safe(pos, tmp, &assigned_reads.node, node){
 		if(pos->tid == tid){
 			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
+			pos->task = NULL;
 			list_del(&pos->node);
 			kfree(pos);
 		}
@@ -272,6 +275,7 @@ void exit_rotlock(){
 	list_for_each_entry_safe(pos, tmp, &assigned_writes.node, node){
 		if(pos->tid == tid){
 			printk("DEBUG: PID %d's LOCK REMOVED\n", tid);
+			pos->task = NULL;
 			list_del(&pos->node);
 			kfree(pos);
 		}
