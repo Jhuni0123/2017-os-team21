@@ -17,7 +17,9 @@
 
 #define NEXT_CASE c++; printf("Case %d\n", c);
 
-#define THREAD(i, x) pthread_create(&pthread[i], NULL, x, NULL)
+#define THREAD(i, x) { pthread_create(&pthread[i], NULL, x, NULL); pthread_detach(pthread[i]); }
+
+#define PROC(x) { if(fork == 0) { x(NULL); return 0; } }
 
 #define F(str) { printf(str"\n"); return -1; }
 
@@ -31,9 +33,35 @@ void t1(void *d)
 	SUC(UNLOCK_WRITE, 60, 30);
 }
 
+void t2(void *d)
+{
+	SUC(SET_ROTATION, 60, 0);
+	SUC(LOCK_WRITE, 30, 30);
+	SUC(SET_ROTATION, 120, 0);
+	SUC(LOCK_READ, 150, 30);
+	sleep(1);
+	exit(0);
+}
+
+void t3(void *d)
+{
+	SUC(LOCK_READ, 0, 30);
+	v1++;
+	sleep(1);
+	SUC(UNLOCK_READ, 0, 30);
+}
+
+void t4(void* d)
+{
+	SUC(LOCK_WRITE, 0, 30);
+	v2++;
+	sleep(1);
+	SUC(UNLOCK_WRITE, 0, 30);
+}
+
 int main()
 {
-	// test cases referenced by issue #68
+	// some test cases referenced by issue #68
 	// https://github.com/swsnu/osspr2017/issues/68
 	pthread_t pthread[20];
 
@@ -43,6 +71,7 @@ int main()
 	SUC(SET_ROTATION, 0, 0);
 	SUC(LOCK_WRITE, 30, 30);
 	FAIL(UNLOCK_WRITE, 29, 30);
+	FAIL(UNLOCK_READ, 30, 30);
 	SUC(UNLOCK_WRITE, 30, 30);
 
 	NEXT_CASE;
@@ -74,6 +103,36 @@ int main()
 
 	NEXT_CASE;
 
+	// process termination case from test case of github issue
+	PROC(t2);
+	SUC(SET_ROTATION, 60, 0);
+	SUC(LOCK_WRITE, 30, 30);
+	SUC(SET_ROTATION, 120, 0);
+	SUC(LOCK_WRITE, 150, 30);
+	SUC(UNLOCK_WRITE, 30, 30);
+	SUC(UNLOCK_WRITE, 150, 30);
 
+	NEXT_CASE;
+	
+	// read/write order
+	// RRWRW
+	printf("this case will take some time\n");
+	v1 = v2 = 0;
+	SUC(SET_ROTATION, 180, 0);
+	THREAD(2, t3);
+	sleep(1);
+	THREAD(3, t3);
+	sleep(1);
+	THREAD(4, t4);
+	sleep(1);
+	THREAD(5, t3);
+	sleep(1);
+	THREAD(6, t4);
+	SUC(SET_ROTATION, 0, 0);
+	while(v2 != 1 || v1 != 0) ;
+	while(v2 != 2 || v1 != 0) ;
+	while(v2 != 2 || v1 != 3) ;
+
+	printf("all tests passed\n");
 }
 
