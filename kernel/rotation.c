@@ -88,8 +88,8 @@ int find_assign_rotlock(void)
 			if(read_left < lo && hi < read_right && write_left < lo && hi < write_right) { /* assignable */
 				assign_rotlock(pos, &assigned_writes);
 				count++;
+				return count;
 			}
-			return count;
 		}
 	}
 
@@ -228,6 +228,9 @@ void exit_rotlock(void)
 {
 	pid_t tid = task_pid_vnr(current);
 	int removed = 0;
+
+	if(current->rotlock_count == 0)
+		return;
 
 	mutex_lock(&rotlock_mutex);
 
