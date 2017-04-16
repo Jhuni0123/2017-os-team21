@@ -22,15 +22,7 @@ int remove_rotlocks_by_tid(struct range_desc *list, int tid);
 void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list);
 int find_assign_rotlock(void);
 
-static void print_range_desc_list(struct range_desc *list){
-	struct range_desc *pos;
-	printk("head");
-	list_for_each_entry(pos, &list->node, node) {
-		printk("->(%d,%d)", pos->degree, pos->range);
-	}
-	printk("\n");
-}
-
+/* should use inside mutex lock */
 int find_assign_rotlock(void)
 {
 	struct range_desc *pos, *tmp;
@@ -51,8 +43,10 @@ int find_assign_rotlock(void)
 		}
 		lo = pos->degree - pos->range;
 		hi = pos->degree + pos->range;
-		if(lo < device_rot) lo += 360;
-		if(hi > device_rot) hi -= 360;
+		if(lo < device_rot)
+			lo += 360;
+		if(hi > device_rot)
+			hi -= 360;
 		write_left = max(write_left, hi);
 		write_right = min(write_right, lo);
 	}
@@ -67,8 +61,10 @@ int find_assign_rotlock(void)
 		}
 		lo = pos->degree - pos->range;
 		hi = pos->degree + pos->range;
-		if(lo < device_rot) lo += 360;
-		if(hi > device_rot) hi -= 360;
+		if(lo < device_rot)
+			lo += 360;
+		if(hi > device_rot)
+			hi -= 360;
 		read_left = max(read_left, hi);
 		read_right = min(read_right, lo);
 	}
@@ -94,8 +90,6 @@ int find_assign_rotlock(void)
 	}
 
 	/* assign read lock */
-	count = 0;
-
 	list_for_each_entry_safe(pos, tmp, &waiting_reads.node, node) {
 		if(rot_in_range(pos)) {
 			lo = pos->degree - pos->range;
@@ -114,6 +108,7 @@ int find_assign_rotlock(void)
 	return count;
 }
 
+/* should use inside mutex lock */
 void assign_rotlock(struct range_desc *lock, struct range_desc *assigned_list)
 {
 	list_del(&lock->node);
@@ -132,10 +127,8 @@ int do_rotlock(int degree, int range, struct range_desc *head)
 
 	newitem = (struct range_desc*) kmalloc(sizeof(struct range_desc), GFP_KERNEL);
 
-	if(newitem == NULL) {
-		printk("DEBUG: kernel has no memory\n");
+	if(newitem == NULL)
 		return -ENOMEM;
-	}
 
 	newitem->degree = degree;
 	newitem->range = range;
@@ -177,13 +170,13 @@ int do_rotunlock(int degree, int range, struct range_desc* head)
 	tid = task_pid_vnr(current);
 
 	mutex_lock(&rotlock_mutex);
+
 	list_for_each_entry(curr, &head->node, node) {
 		if(curr->tid == tid && curr->degree == degree && curr->range == range)
 			break;
 	}
 
 	if(curr == head) {	/* this is true only if iteration is finished */
-		printk("DEBUG: error: no match for rotunlock_read\n");
 		mutex_unlock(&rotlock_mutex);
 		return -EINVAL;
 	}
@@ -193,8 +186,8 @@ int do_rotunlock(int degree, int range, struct range_desc* head)
 
 	find_assign_rotlock();
 
-
 	mutex_unlock(&rotlock_mutex);
+
 	current->rotlock_count--;
 	return 0;
 }
@@ -207,30 +200,23 @@ int do_set_rotation(int degree)
 		return -EINVAL;
 
 	mutex_lock(&rotlock_mutex);
-
 	device_rot = degree;
 	result = find_assign_rotlock();
-	printk("DEBUG: SET ROTATION %d\n", device_rot);
-	printk("DEBUG: WAIT     READ : ");
-	print_range_desc_list(&waiting_reads);
-	printk("DEBUG: WAIT     WRITE: ");
-	print_range_desc_list(&waiting_writes);
-	printk("DEBUG: ASSIGNED READ : ");
-	print_range_desc_list(&assigned_reads);
-	printk("DEBUG: ASSIGNED WRITE: ");
-	print_range_desc_list(&assigned_writes);
-
+	printk("DEBUG: SET ROTATION %d\n",device_rot);
 	mutex_unlock(&rotlock_mutex);
+
 	return result;
 }
 
 void exit_rotlock(void)
 {
-	pid_t tid = task_pid_vnr(current);
+	pid_t tid;
 	int removed = 0;
 
 	if(current->rotlock_count == 0)
 		return;
+
+	tid  = task_pid_vnr(current);
 
 	mutex_lock(&rotlock_mutex);
 
@@ -245,6 +231,7 @@ void exit_rotlock(void)
 	mutex_unlock(&rotlock_mutex);
 }
 
+/* should use inside mutex lock */
 int remove_rotlocks_by_tid(struct range_desc *list, int tid)
 {
 	struct range_desc *pos, *tmp;
