@@ -36,6 +36,8 @@ We manage 4 lists in the project, for
 
 ## Lock assigning policy
 `find_assign_rotlock()` is a main function of the whole project, which is called in almost every syscalls.
+It assure that in any stable time(= mutex not held), the locks are held as much as possible(following our policy).
+
 The function does:
 - lookup assigned write/read lock range
 - iterate waiting write locks, assign it if possible
@@ -48,51 +50,69 @@ So our assigning policy is:
 
 ## Exit handler
 
-In `kernel/exit.c`, we added `exit_rotlock()` function to handle unreleased locks.
+In `kernel/exit.c`, we added `exit_rotlock()` function to handle unreleased locks. <br>
+`exit_rotlock()` removes every locks(waiting, assigned) which the process has requested and call `find_assign_rotlock()` if any lock is removed.
 
 ## Optimizations
 -------
 ### List range lookup
-In `find_assign_rotlock()`, we made code like 
+In past `find_assign_rotlock()`, we made code like 
 ``` C++
 for(entry e1 : waiting locks)
   for(entry e2 : assigned_locks)
     if(no_overlap_with_assigned)
       assign_lock(e1);
 ```
-We made pre-calculation of assigned locks, which made double for-loop into single for-loop.
+But we made pre-calculation of assigned locks, which made double for-loop into single for-loop.
 
 ### rotlock_count
-We added `rotlock_count` in `struct task_struct`, to significantly reduce overhead of doing `rotlock_exit()`.
-`rotlock_count` is incremented when they grab a lock, and decremented when they release it.
-So if `rotlock_count` is 0, the process can exit without iterating all the rotlock entries.
+We added `rotlock_count` in `struct task_struct`, to significantly reduce overhead of doing `rotlock_exit()`. <br>
+`rotlock_count` is incremented when they grab a lock, and decremented when they release it. <br>
+So if `rotlock_count` is 0, the process can exit without iterating all the rotlock entries. <br>
 
 ## Concurrency issues
 -------
-We considered many lock styles, but all had potential hazards.
+### Mutex
+We apply single mutex on entire shared sources. Only one task can access shared sources at a moment. <br>
+So any change on lock is atomic. This simply solve concurrency issue.
+
+-----
+We considered many lock styles below, but all had potential hazards.
 
 ### RCU
-Since list accesses had high chance to write, the performance would not be good.
+Since list accesses had high chance to write, the performance would not be good. <br>
 We considered pseudo-RCU locks with no writer garbage collection, but there was a chance to panic when the entry is `kfree`d.
 
 ### Fine grained locks (per list entry)
-If entry is `kfree`d, there's little chance that next lock grabber would segfault.
-Grabbing contiguous 2 locks would solve the problem, but implemention was complex.
-Also, we concluded this approach had huge overhead with grabbing locks.
+If entry is `kfree`d, there's little chance that next lock grabber would segfault. <br>
+Grabbing contiguous 2 locks would solve the problem, but implemention was complex. <br>
+Also, we concluded this approach had huge overhead with grabbing locks. <br>
 
 ### Conclusion
-Considering arbitary removal in list, we had no way but to make a lock to the entire list to prevent potential hazards.
-There would be a better way to solve the issue if we change the whole data structure, but the process would take so much time.
+Considering arbitary removal in list, we had no way but to make a lock to the entire list to prevent potential hazards. <br>
+There would be a better way to solve the issue if we change the whole data structure, but the process would take so much time. <br>
 Thus we ended up a state like this.
 
 ## Selector & Trial
 ---------
+**build**
+```bash
+cd artik
+make all
+```
+**push to artik**
 
-TODO: 쥬니가 쓰기
+**run** in different windows
+```bash
+./selector 1
+./trial 0
+./trial 1
+```
 
-how to execute?
+Normally, each `trial` factorize each `integer` once. <br>
+But sometimes, `trial` can spin reading same `integer` many times in the middle of `selector` unlock & lock again.
 
-## Test cases
+## Test cases (`testcases.c`)
 - invalid unlock range
 - double unlock
 - assigning policy check
