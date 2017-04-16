@@ -202,6 +202,7 @@ int do_set_rotation(int degree)
 	mutex_lock(&rotlock_mutex);
 	device_rot = degree;
 	result = find_assign_rotlock();
+	printk("DEBUG: SET ROTATION %d\n",device_rot);
 	mutex_unlock(&rotlock_mutex);
 
 	return result;
