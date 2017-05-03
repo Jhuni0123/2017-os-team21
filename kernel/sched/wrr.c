@@ -9,8 +9,40 @@ const struct sched_class wrr_sched_class;
  *********************************
  */
 
+static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se){
+    return container_of(wrr_se, struct task_struct, wrr);
+}
+
+static inline struct wrr_rq *wrr_rq_of_se(struct sched_wrr_entity *wrr_se){
+    return wrr_se->wrr_rq;
+}
+
+
+static void __enqueue_wrr_entity(struct wrr_rq *wrr_rq, struct sched_wrr_entity *wrr_se)
+{
+    struct wrr_rq *curr = wrr_rq_of_se(wrr_se);
+    list_add_tail(curr, wrr_rq);
+}
+
+static struct wrr_rq *__dequeue_wrr_entity(struct wrr_rq *wrr_rq) 
+{
+    struct list_head *last = wrr_rq->node->prev;
+    list_del(last);
+    return list_entry(last, struct wrr_rq, node);
+}
+
 void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
-{ printk("DEBUG: enqueue\n"); }
+{
+    struct wrr_rq *wrr_rq = &rq->wrr;
+    struct sched_wrr_entity *wrr_se = &p->se;
+    //todo: how to handle flags?
+    
+    if(wrr_se->on_wrr_rq)
+        return;
+
+    __enqueue_wrr_entity(wrr_rq, wrr_se);
+    wrr_se->on_wrr_rq = 1; 
+}
 
 void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 { printk("DEBUG: dequeue\n"); }
@@ -25,8 +57,26 @@ bool yield_to_task_wrr (struct rq *rq, struct task_struct *p, bool preempt)
 void check_preempt_curr_wrr (struct rq *rq, struct task_struct *p, int flags)
 { printk("DEBUG: check_preempt_curr\n"); }
 
-struct task_struct * pick_next_task_wrr (struct rq *rq)
-{ printk("DEBUG: pick_next_task\n"); return NULL; }
+struct task_struct *pick_next_task_wrr (struct rq *rq)
+{
+    struct task_struct *p;
+    struct sched_wrr_entity *wrr_se;
+    struct wrr_rq *wrr_rq = &rq->wrr; 
+
+    wrr_se = __dequeue_wrr_entity(wrr_rq)->wrr_se;
+
+    if(!wrr_se)
+        return NULL;
+
+    wrr_se->on_wrr_rq = 0;
+
+    p = wrr_task_of(wrr_se);
+
+    if(hrtick_enabled(rq))
+        hrtick_start(rq, wrr_se->weight * 10);
+
+    return p;
+}
 
 void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
 { printk("DEBUG: put_prev_task\n"); }
