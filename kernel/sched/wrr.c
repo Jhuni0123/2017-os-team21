@@ -99,7 +99,7 @@ const struct sched_class wrr_sched_class = {
 	.yield_task		= yield_task_wrr,
 	.yield_to_task		= yield_to_task_wrr,
 
-	.check_preempt_curr	= check_preempt_wakeup,
+	.check_preempt_curr	= check_preempt_curr_wrr,
 
 	.pick_next_task		= pick_next_task_wrr,
 	.put_prev_task		= put_prev_task_wrr,
