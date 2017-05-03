@@ -24,11 +24,9 @@ static void __enqueue_wrr_entity(struct wrr_rq *wrr_rq, struct sched_wrr_entity 
     list_add_tail(curr, wrr_rq);
 }
 
-static struct wrr_rq *__dequeue_wrr_entity(struct wrr_rq *wrr_rq) 
+static void __dequeue_wrr_entity(struct wrr_rq *wrr_rq) 
 {
-    struct list_head *last = wrr_rq->node->prev;
-    list_del(last);
-    return list_entry(last, struct wrr_rq, node);
+    list_del(wrr_rq->node);
 }
 
 static struct sched_wrr_entry *__pick_next_entity(struct wrr_rq *wrr_rq){
@@ -47,15 +45,30 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
     struct sched_wrr_entity *wrr_se = &p->se;
     //todo: how to handle flags?
     
-    if(wrr_se->on_wrr_rq)
+    if(wrr_se->on_wrr_rq){
+        printk("DEBUG: already on wrr rq\n");
         return;
+    }
 
     __enqueue_wrr_entity(wrr_rq, wrr_se);
     wrr_se->on_wrr_rq = 1; 
 }
 
 void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
-{ printk("DEBUG: dequeue\n"); }
+{ 
+    printk("DEBUG: dequeue\n"); 
+
+    struct sched_wrr_entity *wrr_se = &p->se;
+    //todo: how to handle flags?
+
+    if(!(wrr_se->on_wrr_rq)){
+        printk("DEBUG: not on wrr rq\n");
+        return;
+    }
+
+    __dequeue_wrr_entity(wrr_se->wrr_rq);
+    wrr_se->on_wrr_rq = 0;
+}
 
 void yield_task_wrr (struct rq *rq)
 { printk("DEBUG: yield_task\n"); }
