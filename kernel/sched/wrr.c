@@ -1,3 +1,5 @@
+#include "sched.h"
+#include <linux/slab.h>
 
 const struct sched_class wrr_sched_class;
 
@@ -128,4 +130,15 @@ const struct sched_class wrr_sched_class = {
 	.task_woken		= task_woken_wrr,
 	.set_cpus_allowed	= set_cpus_allowed_wrr
 };
+
+void print_wrr_stats(struct seq_file *m, int cpu)
+{
+	//rt_rq_iter_t iter;
+	struct wrr_rq *wrr_rq;
+
+	rcu_read_lock();
+	//for_each_rt_rq(rt_rq, iter, cpu_rq(cpu))
+		//print_rt_rq(m, cpu, rt_rq);
+	rcu_read_unlock();
+}
 
