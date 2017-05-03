@@ -19,19 +19,18 @@ static inline struct wrr_rq *wrr_rq_of_se(struct sched_wrr_entity *wrr_se)
     return wrr_se->wrr_rq;
 }
 
-
-static void __enqueue_wrr_entity(struct wrr_rq *wrr_rq, struct sched_wrr_entity *wrr_se)
+static inline void __enqueue_wrr_entity(struct wrr_rq *wrr_rq, struct sched_wrr_entity *wrr_se)
 {
     struct wrr_rq *curr = wrr_rq_of_se(wrr_se);
     list_add_tail(curr, wrr_rq);
 }
 
-static void __dequeue_wrr_entity(struct wrr_rq *wrr_rq) 
+static inline void __dequeue_wrr_entity(struct wrr_rq *wrr_rq) 
 {
     list_del(wrr_rq->node);
 }
 
-static void __requeue_wrr_entity(struct wrr_rq *curr, struct wrr_rq *wrr_rq)
+static inline void __requeue_wrr_entity(struct wrr_rq *curr, struct wrr_rq *wrr_rq)
 {
     list_move_tail(curr, wrr_rq);
 }
