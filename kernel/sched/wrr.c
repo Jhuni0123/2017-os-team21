@@ -31,8 +31,18 @@ static struct wrr_rq *__dequeue_wrr_entity(struct wrr_rq *wrr_rq)
     return list_entry(last, struct wrr_rq, node);
 }
 
+static struct sched_wrr_entry *__pick_next_entity(struct wrr_rq *wrr_rq){
+    struct wrr_rq *next;
+    struct sched_wrr_entry *wrr_se;
+    next = list_entry(wrr_rq->node->next, struct wrr_rq, node);
+    wrr_se = wrr_rq->wrr_se;
+    return wrr_se;
+}
+
 void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 {
+    printk("DEBUG: enqueue\n");
+
     struct wrr_rq *wrr_rq = &rq->wrr;
     struct sched_wrr_entity *wrr_se = &p->se;
     //todo: how to handle flags?
@@ -59,16 +69,16 @@ void check_preempt_curr_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 struct task_struct *pick_next_task_wrr (struct rq *rq)
 {
+    printk("DEBUG: pick_next_task\n");
+
     struct task_struct *p;
     struct sched_wrr_entity *wrr_se;
     struct wrr_rq *wrr_rq = &rq->wrr; 
 
-    wrr_se = __dequeue_wrr_entity(wrr_rq)->wrr_se;
+    wrr_se = __pick_next_entity(wrr_rq);
 
     if(!wrr_se)
         return NULL;
-
-    wrr_se->on_wrr_rq = 0;
 
     p = wrr_task_of(wrr_se);
 
