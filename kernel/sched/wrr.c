@@ -9,11 +9,13 @@ const struct sched_class wrr_sched_class;
  *********************************
  */
 
-static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se){
+static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
+{
     return container_of(wrr_se, struct task_struct, wrr);
 }
 
-static inline struct wrr_rq *wrr_rq_of_se(struct sched_wrr_entity *wrr_se){
+static inline struct wrr_rq *wrr_rq_of_se(struct sched_wrr_entity *wrr_se)
+{
     return wrr_se->wrr_rq;
 }
 
@@ -29,6 +31,11 @@ static void __dequeue_wrr_entity(struct wrr_rq *wrr_rq)
     list_del(wrr_rq->node);
 }
 
+static void __requeue_wrr_entity(struct wrr_rq *curr, struct wrr_rq *wrr_rq)
+{
+    list_move_tail(curr, wrr_rq);
+}
+    
 static struct sched_wrr_entry *__pick_next_entity(struct wrr_rq *wrr_rq){
     struct wrr_rq *next;
     struct sched_wrr_entry *wrr_se;
@@ -42,7 +49,7 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
     printk("DEBUG: enqueue\n");
 
     struct wrr_rq *wrr_rq = &rq->wrr;
-    struct sched_wrr_entity *wrr_se = &p->se;
+    struct sched_wrr_entity *wrr_se = &p->wrr;
     //todo: how to handle flags?
     
     if(wrr_se->on_wrr_rq){
@@ -58,7 +65,7 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 { 
     printk("DEBUG: dequeue\n"); 
 
-    struct sched_wrr_entity *wrr_se = &p->se;
+    struct sched_wrr_entity *wrr_se = &p->wrr;
     //todo: how to handle flags?
 
     if(!(wrr_se->on_wrr_rq)){
@@ -71,7 +78,21 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 }
 
 void yield_task_wrr (struct rq *rq)
-{ printk("DEBUG: yield_task\n"); }
+{ 
+    printk("DEBUG: yield_task\n"); 
+    
+    struct wrr_rq *wrr_rq = &rq->wrr;
+    struct task_struct *curr = rq->curr;
+    struct sched_wrr_entity *wrr_se = &curr->wrr;
+    
+    if(!(wrr_se->on_wrr_rq)){
+        printk("DEBUG: not on wrr rq\n");
+        return;
+    }
+
+    __requeue_wrr_entity(wrr_se->wrr_rq, wrr_rq);
+
+}
 
 // not in rt
 bool yield_to_task_wrr (struct rq *rq, struct task_struct *p, bool preempt)
