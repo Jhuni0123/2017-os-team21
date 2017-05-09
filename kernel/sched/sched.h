@@ -363,10 +363,10 @@ struct rt_rq {
 
 /* wrr related fields in a runqueue */
 struct wrr_rq {
-	// todo: running하고 있는지 확인하는 방법 알아보기
 	unsigned int wrr_nr_running;
 	struct sched_wrr_entity *curr;
 	struct list_head queue_head;
+	struct rq *rq;
 };
 
 /*
