@@ -10,11 +10,13 @@ const struct sched_class wrr_sched_class;
  *********************************
  */
 
-void init_wrr_rq(struct wrr_rq *wrr_rq)
+void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 {
 	wrr_rq->wrr_nr_running = 0;
 	wrr_rq->curr = NULL;
 	INIT_LIST_HEAD(&wrr_rq->queue_head);
+	wrr_rq->rq = rq;
+
 }
 
 static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
@@ -63,7 +65,6 @@ static struct sched_wrr_entity *__pick_next_entity(struct wrr_rq *wrr_rq){
 		next = list_entry(wrr_rq->queue_head.next->next, struct sched_wrr_entity, queue_node);
 
 	return next;
-
 }
 
 void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
@@ -118,7 +119,6 @@ void yield_task_wrr (struct rq *rq)
 	}
 
 	__requeue_wrr_entity(wrr_se, wrr_rq);
-
 }
 
 // not in rt
@@ -149,8 +149,21 @@ struct task_struct *pick_next_task_wrr (struct rq *rq)
 	return p;
 }
 
+/* 이거 */
 void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
-{ printk("DEBUG: %d: put_prev_task\n", p->pid); }
+{
+	printk("DEBUG: %d: put_prev_task\n", p->pid); 
+
+	struct wrr_rq *wrr_rq = &rq->wrr;
+	struct sched_wrr_entity *wrr_se = &p->wrr;
+
+	if(!(wrr_se->on_wrr_rq)){
+		printk("DEBUG: not on wrr rq\n");
+		return;
+	}
+
+	__requeue_wrr_entity(wrr_se, wrr_rq);
+}
 
 #ifdef CONFIG_SMP
 int  select_task_rq_wrr (struct task_struct *p, int sd_flag, int flags)
@@ -190,6 +203,7 @@ void rq_offline_wrr (struct rq *rq)
 void set_curr_task_wrr (struct rq *rq)
 { printk("DEBUG: set_curr_task_wrr\n"); }
 
+/* 이거 for load balancing */
 void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
 { printk("DEBUG: %d: task_tick\n", p->pid); }
 
