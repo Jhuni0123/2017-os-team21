@@ -108,6 +108,7 @@ extern struct mutex sched_domains_mutex;
 
 struct cfs_rq;
 struct rt_rq;
+struct wrr_rq;
 
 extern struct list_head task_groups;
 
@@ -360,6 +361,13 @@ struct rt_rq {
 
 #ifdef CONFIG_SMP
 
+/* wrr related fields in a runqueue */
+struct wrr_rq {
+    // todo: running하고 있는지 확인하는 방법 알아보기
+    struct list_head *node;
+    struct sched_wrr_entity *wrr_se;
+};
+
 /*
  * We add the notion of a root-domain which will be used to define per-domain
  * variables. Each exclusive cpuset essentially defines an island domain by
@@ -422,6 +430,7 @@ struct rq {
 
 	struct cfs_rq cfs;
 	struct rt_rq rt;
+    struct wrr_rq wrr;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */

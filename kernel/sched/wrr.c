@@ -9,84 +9,177 @@ const struct sched_class wrr_sched_class;
  *********************************
  */
 
+static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
+{
+    return container_of(wrr_se, struct task_struct, wrr);
+}
+
+static inline struct wrr_rq *wrr_rq_of_se(struct sched_wrr_entity *wrr_se)
+{
+    return wrr_se->wrr_rq;
+}
+
+static inline void __enqueue_wrr_entity(struct wrr_rq *wrr_rq, struct sched_wrr_entity *wrr_se)
+{
+    struct wrr_rq *curr = wrr_rq_of_se(wrr_se);
+    list_add_tail(curr, wrr_rq);
+}
+
+static inline void __dequeue_wrr_entity(struct wrr_rq *wrr_rq) 
+{
+    list_del(wrr_rq->node);
+}
+
+static inline void __requeue_wrr_entity(struct wrr_rq *curr, struct wrr_rq *wrr_rq)
+{
+    list_move_tail(curr, wrr_rq);
+}
+    
+static struct sched_wrr_entry *__pick_next_entity(struct wrr_rq *wrr_rq){
+    struct wrr_rq *next;
+    struct sched_wrr_entry *wrr_se;
+    next = list_entry(wrr_rq->node->next, struct wrr_rq, node);
+    wrr_se = wrr_rq->wrr_se;
+    return wrr_se;
+}
+
 void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
-{ printk("DEBUG: enqueue\n"); }
+{
+    printk("DEBUG: %d: enqueue\n", p->pid);
+
+    struct wrr_rq *wrr_rq = &rq->wrr;
+    struct sched_wrr_entity *wrr_se = &p->wrr;
+    //todo: how to handle flags?
+    
+    if(wrr_se->on_wrr_rq){
+        printk("DEBUG: already on wrr rq\n");
+        return;
+    }
+
+    __enqueue_wrr_entity(wrr_rq, wrr_se);
+    wrr_se->on_wrr_rq = 1; 
+}
 
 void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
-{ printk("DEBUG: dequeue\n"); }
+{ 
+    printk("DEBUG: %d: dequeue\n", p->pid); 
+
+    struct sched_wrr_entity *wrr_se = &p->wrr;
+    //todo: how to handle flags?
+
+    if(!(wrr_se->on_wrr_rq)){
+        printk("DEBUG: %d: not on wrr rq\n", p->pid);
+        return;
+    }
+
+    __dequeue_wrr_entity(wrr_se->wrr_rq);
+    wrr_se->on_wrr_rq = 0;
+}
 
 void yield_task_wrr (struct rq *rq)
-{ printk("DEBUG: yield_task\n"); }
+{ 
+    printk("DEBUG: %d: yield_task\n", p->pid); 
+    
+    struct wrr_rq *wrr_rq = &rq->wrr;
+    struct task_struct *curr = rq->curr;
+    struct sched_wrr_entity *wrr_se = &curr->wrr;
+    
+    if(!(wrr_se->on_wrr_rq)){
+        printk("DEBUG: %d: not on wrr rq\n", p->pid);
+        return;
+    }
+
+    __requeue_wrr_entity(wrr_se->wrr_rq, wrr_rq);
+
+}
 
 // not in rt
 bool yield_to_task_wrr (struct rq *rq, struct task_struct *p, bool preempt)
-{ printk("DEBUG: yield_to_task\n"); }
+{ printk("DEBUG: %d: yield_to_task\n", p->pid); }
 
 void check_preempt_curr_wrr (struct rq *rq, struct task_struct *p, int flags)
-{ printk("DEBUG: check_preempt_curr\n"); }
+{ printk("DEBUG: %d: check_preempt_curr\n", p->pid); }
 
-struct task_struct * pick_next_task_wrr (struct rq *rq)
-{ printk("DEBUG: pick_next_task\n"); return NULL; }
+struct task_struct *pick_next_task_wrr (struct rq *rq)
+{
+    printk("DEBUG: %d: pick_next_task\n", p->pid);
+
+    struct task_struct *p;
+    struct sched_wrr_entity *wrr_se;
+    struct wrr_rq *wrr_rq = &rq->wrr; 
+
+    wrr_se = __pick_next_entity(wrr_rq);
+
+    if(!wrr_se)
+        return NULL;
+
+    p = wrr_task_of(wrr_se);
+
+    if(hrtick_enabled(rq))
+        hrtick_start(rq, wrr_se->weight * 10);
+
+    return p;
+}
 
 void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
-{ printk("DEBUG: put_prev_task\n"); }
+{ printk("DEBUG: %d: put_prev_task\n", p->pid); }
 
 #ifdef CONFIG_SMP
 int  select_task_rq_wrr (struct task_struct *p, int sd_flag, int flags)
-{ printk("DEBUG: select_task_rq\n"); return 0; }
+{ printk("DEBUG: %d: select_task_rq\n", p->pid); return 0; }
 
 // not in rt
 void migrate_task_rq_wrr (struct task_struct *p, int next_cpu)
-{ printk("DEBUG: migrate_task_rq\n"); }
+{ printk("DEBUG: %d: migrate_task_rq\n", p->pid); }
 
 // not in fair
 void pre_schedule_wrr (struct rq *this_rq, struct task_struct *task)
-{ printk("DEBUG: pre_schedule\n"); }
+{ printk("DEBUG: %d: pre_schedule\n", p->pid); }
 
 // not in fair
 void post_schedule_wrr (struct rq *this_rq)
-{ printk("DEBUG: post_schedule\n"); }
+{ printk("DEBUG: %d: post_schedule\n", p->pid); }
 
 // not in rt
 void task_waking_wrr (struct task_struct *task)
-{ printk("DEBUG: task_waking\n"); }
+{ printk("DEBUG: %d: task_waking\n", p->pid); }
 
 // not in fair
 void task_woken_wrr (struct rq *this_rq, struct task_struct *task)
-{ printk("DEBUG: task_woken\n"); }
+{ printk("DEBUG: %d:  task_woken\n", p->pid); }
 
 // not in fair
 void set_cpus_allowed_wrr (struct task_struct *p, const struct cpumask *newmask)
-{ printk("DEBUG: set_cpus_allowed\n"); }
+{ printk("DEBUG: %d: set_cpus_allowed\n", p->pid); }
 
 void rq_online_wrr (struct rq *rq)
-{ printk("DEBUG: rq_online\n"); }
+{ printk("DEBUG: %d: rq_online\n", p->pid); }
 
 void rq_offline_wrr (struct rq *rq)
-{ printk("DEBUG: rq_offline\n"); }
+{ printk("DEBUG: %d: rq_offline\n", p->pid); }
 #endif
 
 void set_curr_task_wrr (struct rq *rq)
-{ printk("DEBUG: set_curr_task_wrr\n"); }
+{ printk("DEBUG: %d: set_curr_task_wrr\n", p->pid); }
 
 void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
-{ printk("DEBUG: task_tick\n"); }
+{ printk("DEBUG: %d: task_tick\n", p->pid); }
 
 // not in rt
 void task_fork_wrr (struct task_struct *p)
-{ printk("DEBUG: task_fork\n"); }
+{ printk("DEBUG: %d: task_fork\n", p->pid); }
 
 void switched_from_wrr (struct rq *this_rq, struct task_struct *task)
-{ printk("DEBUG: switched_from\n"); }
+{ printk("DEBUG: %d: twitched_from\n", p->pid); }
 
 void switched_to_wrr (struct rq *this_rq, struct task_struct *task)
-{ printk("DEBUG: switched_to\n"); }
+{ printk("DEBUG: %d: switched_to\n", p->pid); }
 
 void prio_changed_wrr (struct rq *this_rq, struct task_struct *task, int oldprio)
-{ printk("DEBUG: prio_changed\n"); }
+{ printk("DEBUG: %d: prio_changed\n", p->pid); }
 
 unsigned int get_rr_interval_wrr (struct rq *rq, struct task_struct *task)
-{ printk("DEBUG: get_rr_interval\n"); }
+{ printk("DEBUG: %d: get_rr_interval\n", p->pid); }
 
 
 /*
