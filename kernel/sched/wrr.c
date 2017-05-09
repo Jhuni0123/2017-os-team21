@@ -48,13 +48,13 @@ static struct sched_wrr_entity *__pick_next_entity(struct wrr_rq *wrr_rq){
 	
 	struct sched_wrr_entity *next;
 
-	if(list_empty(&wrr_rq->queue_head)){
-		printk("DEBUG: wrr_rq empty\n");
+	next = list_first_entry_or_null(&wrr_rq->queue_head, struct sched_wrr_entity, queue_node);
+	
+	if(!next){
+		printk("DEBUG: no entry on wrr_rq at __pick_next_entity\n");
 		return NULL;
 	}
 
-	next = list_entry(wrr_rq->queue_head.next, struct sched_wrr_entity, queue_node);
-	
 	/* if there is only one entry in the queue, 
 	 * just return it regardless of it running right now */
 	if(wrr_rq->wrr_nr_running == 1)
@@ -149,7 +149,6 @@ struct task_struct *pick_next_task_wrr (struct rq *rq)
 	return p;
 }
 
-/* 이거 */
 void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
 {
 	printk("DEBUG: %d: put_prev_task\n", p->pid); 
