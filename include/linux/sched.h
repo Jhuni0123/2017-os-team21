@@ -1057,9 +1057,9 @@ struct sched_rt_entity {
 struct sched_wrr_entity {
 	int weight;
 	int on_wrr_rq;
+	struct list_head queue_node;
 	/* rq on which this entity is (to be) queued: */
 	struct wrr_rq *wrr_rq;
-	struct list_head queue_node;
 };
 
 struct rcu_node;

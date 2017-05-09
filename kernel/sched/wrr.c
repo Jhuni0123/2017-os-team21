@@ -10,11 +10,13 @@ const struct sched_class wrr_sched_class;
  *********************************
  */
 
-void init_wrr_rq(struct wrr_rq *wrr_rq)
+void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 {
 	wrr_rq->wrr_nr_running = 0;
 	wrr_rq->curr = NULL;
-	INIT_LIST_HEAD(wrr_rq->queue_head);
+	INIT_LIST_HEAD(&wrr_rq->queue_head);
+	wrr_rq->rq = rq;
+
 }
 
 static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
@@ -42,12 +44,27 @@ static inline void __requeue_wrr_entity(struct sched_wrr_entity *curr, struct wr
 	list_move_tail(&curr->queue_node, &wrr_rq->queue_head);
 }
 
-static struct sched_wrr_entry *__pick_next_entity(struct wrr_rq *wrr_rq){
-	struct wrr_rq *next;
-	struct sched_wrr_entry *wrr_se;
-	next = list_entry(wrr_rq->node->next, struct wrr_rq, node);
-	wrr_se = wrr_rq->wrr_se;
-	return wrr_se;
+static struct sched_wrr_entity *__pick_next_entity(struct wrr_rq *wrr_rq){
+	
+	struct sched_wrr_entity *next;
+
+	next = list_first_entry_or_null(&wrr_rq->queue_head, struct sched_wrr_entity, queue_node);
+	
+	if(!next){
+		printk("DEBUG: no entry on wrr_rq at __pick_next_entity\n");
+		return NULL;
+	}
+
+	/* if there is only one entry in the queue, 
+	 * just return it regardless of it running right now */
+	if(wrr_rq->wrr_nr_running == 1)
+		return next;
+
+	/* if it's already running, choose the next one */
+	if(wrr_task_of(next) == wrr_rq->rq->curr)
+		next = list_entry(wrr_rq->queue_head.next->next, struct sched_wrr_entity, queue_node);
+
+	return next;
 }
 
 void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
@@ -64,6 +81,8 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 	}
 
 	__enqueue_wrr_entity(wrr_rq, wrr_se);
+
+	wrr_rq->wrr_nr_running++;
 	wrr_se->on_wrr_rq = 1; 
 }
 
@@ -71,6 +90,7 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 { 
 	printk("DEBUG: %d: dequeue\n", p->pid); 
 
+	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	//todo: how to handle flags?
 
@@ -79,7 +99,9 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 		return;
 	}
 
-	__dequeue_wrr_entity(wrr_se->wrr_rq);
+	__dequeue_wrr_entity(wrr_se);
+
+	wrr_rq->wrr_nr_running--;
 	wrr_se->on_wrr_rq = 0;
 }
 
@@ -96,8 +118,7 @@ void yield_task_wrr (struct rq *rq)
 		return;
 	}
 
-	__requeue_wrr_entity(wrr_se->wrr_rq, wrr_rq);
-
+	__requeue_wrr_entity(wrr_se, wrr_rq);
 }
 
 // not in rt
@@ -129,7 +150,19 @@ struct task_struct *pick_next_task_wrr (struct rq *rq)
 }
 
 void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
-{ printk("DEBUG: %d: put_prev_task\n", p->pid); }
+{
+	printk("DEBUG: %d: put_prev_task\n", p->pid); 
+
+	struct wrr_rq *wrr_rq = &rq->wrr;
+	struct sched_wrr_entity *wrr_se = &p->wrr;
+
+	if(!(wrr_se->on_wrr_rq)){
+		printk("DEBUG: not on wrr rq\n");
+		return;
+	}
+
+	__requeue_wrr_entity(wrr_se, wrr_rq);
+}
 
 #ifdef CONFIG_SMP
 int  select_task_rq_wrr (struct task_struct *p, int sd_flag, int flags)
@@ -169,6 +202,7 @@ void rq_offline_wrr (struct rq *rq)
 void set_curr_task_wrr (struct rq *rq)
 { printk("DEBUG: set_curr_task_wrr\n"); }
 
+/* 이거 for load balancing */
 void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
 { printk("DEBUG: %d: task_tick\n", p->pid); }
 
