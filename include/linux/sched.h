@@ -1055,10 +1055,11 @@ struct sched_rt_entity {
 };
 
 struct sched_wrr_entity {
-    int weight;
-    int on_wrr_rq;
-    /* rq on which this entity is (to be) queued: */
-    struct wrr_rq *wrr_rq;
+	int weight;
+	int on_wrr_rq;
+	/* rq on which this entity is (to be) queued: */
+	struct wrr_rq *wrr_rq;
+	struct list_head queue_node;
 };
 
 struct rcu_node;
@@ -1088,7 +1089,7 @@ struct task_struct {
 	const struct sched_class *sched_class;
 	struct sched_entity se;
 	struct sched_rt_entity rt;
-    struct sched_wrr_entity wrr;
+	struct sched_wrr_entity wrr;
 #ifdef CONFIG_CGROUP_SCHED
 	struct task_group *sched_task_group;
 #endif

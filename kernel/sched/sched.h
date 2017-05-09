@@ -363,9 +363,10 @@ struct rt_rq {
 
 /* wrr related fields in a runqueue */
 struct wrr_rq {
-    // todo: running하고 있는지 확인하는 방법 알아보기
-    struct list_head *node;
-    struct sched_wrr_entity *wrr_se;
+	// todo: running하고 있는지 확인하는 방법 알아보기
+	unsigned int wrr_nr_running;
+	struct sched_wrr_entity *curr;
+	struct list_head queue_head;
 };
 
 /*
@@ -430,7 +431,7 @@ struct rq {
 
 	struct cfs_rq cfs;
 	struct rt_rq rt;
-    struct wrr_rq wrr;
+	struct wrr_rq wrr;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */
@@ -1335,6 +1336,7 @@ extern void print_rt_stats(struct seq_file *m, int cpu);
 
 extern void init_cfs_rq(struct cfs_rq *cfs_rq);
 extern void init_rt_rq(struct rt_rq *rt_rq, struct rq *rq);
+extern void init_wrr_rq(struct wrr_rq *wrr_rq);
 
 extern void cfs_bandwidth_usage_inc(void);
 extern void cfs_bandwidth_usage_dec(void);
