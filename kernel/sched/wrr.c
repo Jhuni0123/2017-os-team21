@@ -51,7 +51,7 @@ static struct sched_wrr_entity *__pick_next_entity(struct wrr_rq *wrr_rq){
 	next = list_first_entry_or_null(&wrr_rq->queue_head, struct sched_wrr_entity, queue_node);
 	
 	if(!next){
-		printk("DEBUG: no entry on wrr_rq at __pick_next_entity\n");
+		//printk("DEBUG: no entry on wrr_rq at __pick_next_entity\n");
 		return NULL;
 	}
 
@@ -69,14 +69,14 @@ static struct sched_wrr_entity *__pick_next_entity(struct wrr_rq *wrr_rq){
 
 void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 {
-	printk("DEBUG: %d: enqueue\n", p->pid);
+	//printk("DEBUG: %d: enqueue\n", p->pid);
 
 	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	//todo: how to handle flags?
 
 	if(wrr_se->on_wrr_rq){
-		printk("DEBUG: already on wrr rq\n");
+		//printk("DEBUG: already on wrr rq\n");
 		return;
 	}
 
@@ -88,14 +88,14 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 { 
-	printk("DEBUG: %d: dequeue\n", p->pid); 
+	//printk("DEBUG: %d: dequeue\n", p->pid); 
 
 	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	//todo: how to handle flags?
 
 	if(!(wrr_se->on_wrr_rq)){
-		printk("DEBUG: %d: not on wrr rq\n", p->pid);
+		//printk("DEBUG: %d: not on wrr rq\n", p->pid);
 		return;
 	}
 
@@ -107,14 +107,14 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 void yield_task_wrr (struct rq *rq)
 { 
-	printk("DEBUG: yield_task\n"); 
+	//printk("DEBUG: yield_task\n"); 
 
 	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct task_struct *curr = rq->curr;
 	struct sched_wrr_entity *wrr_se = &curr->wrr;
 
 	if(!(wrr_se->on_wrr_rq)){
-		printk("DEBUG: not on wrr rq\n");
+		//printk("DEBUG: not on wrr rq\n");
 		return;
 	}
 
@@ -130,7 +130,7 @@ void check_preempt_curr_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 struct task_struct *pick_next_task_wrr (struct rq *rq)
 {
-	printk("DEBUG: pick_next_task\n");
+	//printk("DEBUG: pick_next_task\n");
 
 	struct task_struct *p;
 	struct sched_wrr_entity *wrr_se;
@@ -151,13 +151,13 @@ struct task_struct *pick_next_task_wrr (struct rq *rq)
 
 void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
 {
-	printk("DEBUG: %d: put_prev_task\n", p->pid); 
+	//printk("DEBUG: %d: put_prev_task\n", p->pid); 
 
 	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 
 	if(!(wrr_se->on_wrr_rq)){
-		printk("DEBUG: not on wrr rq\n");
+		//printk("DEBUG: not on wrr rq\n");
 		return;
 	}
 
