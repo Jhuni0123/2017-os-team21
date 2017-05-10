@@ -82,7 +82,9 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 	__enqueue_wrr_entity(wrr_rq, wrr_se);
 
+	inc_nr_running(rq);
 	wrr_rq->wrr_nr_running++;
+	wrr_rq->weight_sum += wrr_se->weight;
 	wrr_se->on_wrr_rq = 1; 
 }
 
@@ -101,7 +103,9 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 	__dequeue_wrr_entity(wrr_se);
 
+	dec_nr_running(rq);
 	wrr_rq->wrr_nr_running--;
+	wrr_rq->weight_sum -= wrr_se->weight;
 	wrr_se->on_wrr_rq = 0;
 }
 
@@ -222,6 +226,59 @@ void prio_changed_wrr (struct rq *this_rq, struct task_struct *task, int oldprio
 unsigned int get_rr_interval_wrr (struct rq *rq, struct task_struct *task)
 { printk("DEBUG: %d: get_rr_interval\n", task->pid); return 0; }
 
+static int load_balance()
+{
+	int i;
+	int max_cpu = -1;
+	int min_cpu = -1;
+	int max_weight = -1;
+	int min_weight = 1000000000;
+
+	for_each_possible_cpu(i){
+		struct rq *rq = cpu_rq(i);
+		struct wrr_rq *wrr_rq = &rq->wrr;
+		if(max_weight < wrr_rq->weight_sum){
+			max_cpu = i;
+			max_weight = wrr_rq->weight_sum;
+		}
+		if(min_weight > wrr_rq->weight_sum){
+			min_cpu = i;
+			min_weight = wrr_rq->weight_sum;
+		}
+	}
+	
+	// hold lock for cpu max_cpu, min_cpu
+	
+	struct wrr_rq *max_wrr_rq = &cpu_rq(max_cpu)->wrr;
+	struct wrr_rq *min_wrr_rq = &cpu_rq(min_cpu)->wrr;
+	struct sched_wrr_entity *pos;
+	struct sched_wrr_entity *first;
+	struct sched_wrr_entity *to_move;
+	int move_weight = -1;
+
+	first = list_first_entry_or_null(&max_wrr_rq->queue_head, struct sched_wrr_entity, queue_node);
+	
+	if(!first){
+		printk("DEBUG: no entry on max_wrr_rq at load_balance\n");
+		return -1;
+	}
+
+	/* if it's already running, exclude it from candidates */
+	if(wrr_task_of(first) == max_wrr_rq->rq->curr)
+		first = list_entry(max_wrr_rq->queue_head.next->next, struct sched_wrr_entity, queue_node);
+ 
+		
+	list_for_each_entry(pos, &(first->queue_node), queue_node){
+		if(pos->weight > move_weight && pos->weight < (max_weight - min_weight)){
+			to_move = pos;
+			move_weight = pos->weight;
+		}
+	}
+
+	list_move_tail(&to_move->queue_node, &min_wrr_rq->queue_head);
+
+	// release lock for cpu max_cpu, min_cpu
+}
 
 /*
  * Scheduling class
