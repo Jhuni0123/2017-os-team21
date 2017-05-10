@@ -134,7 +134,7 @@ struct task_struct *pick_next_task_wrr (struct rq *rq)
 {
 
 	struct task_struct *p;
-	struct sched_wrr_entity *wrr_se;
+	struct sched_wrr_entity *wrr_se, *pos;
 	struct wrr_rq *wrr_rq = &rq->wrr; 
 
 	wrr_se = __pick_next_entity(wrr_rq);
@@ -142,11 +142,16 @@ struct task_struct *pick_next_task_wrr (struct rq *rq)
 	if(!wrr_se)
 		return NULL;
 
+	printk("DEBUG: wrr_rq: ");
+	list_for_each_entry(pos, &wrr_rq->queue_head, queue_node) {
+		printk("%d->", wrr_task_of(pos)->pid);
+	}
+	printk("\n");
 	p = wrr_task_of(wrr_se);
 
 	printk("DEBUG: pick_next_task %d\n", p->pid);
 
-	wrr_se->time_slice = wrr_se->weight * 10;
+	wrr_se->time_slice = wrr_se->weight * 2;
 
 	return p;
 }
