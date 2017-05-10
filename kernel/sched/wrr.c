@@ -82,7 +82,7 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 	__enqueue_wrr_entity(wrr_rq, wrr_se);
 
-	wrr_rq->wrr_nr_running++;
+	atomic_inc(wrr_rq->wrr_nr_running);
 	wrr_se->on_wrr_rq = 1; 
 }
 
@@ -98,10 +98,10 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 		printk("DEBUG: %d: not on wrr rq\n", p->pid);
 		return;
 	}
-
+	
 	__dequeue_wrr_entity(wrr_se);
 
-	wrr_rq->wrr_nr_running--;
+	atomic_dec(wrr_rq->wrr_nr_running);
 	wrr_se->on_wrr_rq = 0;
 }
 
