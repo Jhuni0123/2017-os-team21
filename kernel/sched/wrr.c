@@ -69,26 +69,27 @@ static struct sched_wrr_entity *__pick_next_entity(struct wrr_rq *wrr_rq){
 
 void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 {
-	//printk("DEBUG: %d: enqueue\n", p->pid);
+	printk("DEBUG: %d: enqueue\n", p->pid);
 
 	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	//todo: how to handle flags?
 
 	if(wrr_se->on_wrr_rq){
-		//printk("DEBUG: already on wrr rq\n");
+		printk("DEBUG: already on wrr rq\n");
 		return;
 	}
 
 	__enqueue_wrr_entity(wrr_rq, wrr_se);
 
+	inc_nr_running(rq);
 	wrr_rq->wrr_nr_running++;
 	wrr_se->on_wrr_rq = 1; 
 }
 
 void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 { 
-	//printk("DEBUG: %d: dequeue\n", p->pid); 
+	printk("DEBUG: %d: dequeue\n", p->pid); 
 
 	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct sched_wrr_entity *wrr_se = &p->wrr;
@@ -101,6 +102,7 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 	__dequeue_wrr_entity(wrr_se);
 
+	dec_nr_running(rq);
 	wrr_rq->wrr_nr_running--;
 	wrr_se->on_wrr_rq = 0;
 }
@@ -130,7 +132,6 @@ void check_preempt_curr_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 struct task_struct *pick_next_task_wrr (struct rq *rq)
 {
-	//printk("DEBUG: pick_next_task\n");
 
 	struct task_struct *p;
 	struct sched_wrr_entity *wrr_se;
@@ -143,15 +144,16 @@ struct task_struct *pick_next_task_wrr (struct rq *rq)
 
 	p = wrr_task_of(wrr_se);
 
-	if(hrtick_enabled(rq))
-		hrtick_start(rq, wrr_se->weight * 10);
+	printk("DEBUG: pick_next_task %d\n", p->pid);
+
+	wrr_se->time_slice = wrr_se->weight * 10;
 
 	return p;
 }
 
 void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
 {
-	//printk("DEBUG: %d: put_prev_task\n", p->pid); 
+	/*printk("DEBUG: %d: put_prev_task\n", p->pid); 
 
 	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct sched_wrr_entity *wrr_se = &p->wrr;
@@ -161,7 +163,7 @@ void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
 		return;
 	}
 
-	__requeue_wrr_entity(wrr_se, wrr_rq);
+	__requeue_wrr_entity(wrr_se, wrr_rq);*/
 }
 
 #ifdef CONFIG_SMP
@@ -204,11 +206,26 @@ void set_curr_task_wrr (struct rq *rq)
 
 /* 이거 for load balancing */
 void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
-{ printk("DEBUG: %d: task_tick\n", p->pid); }
+{
+	//printk("DEBUG: %d: task_tick\n", p->pid);
+
+	if (p->policy != SCHED_WRR)
+		return;
+
+	if (--p->wrr.time_slice)
+		return;
+
+	printk("DEBUG: pid %d time_slice is ZERO\n", p->pid);
+	__requeue_wrr_entity(&p->wrr, &rq->wrr);
+	set_tsk_need_resched(p);
+}
 
 // not in rt
 void task_fork_wrr (struct task_struct *p)
-{ printk("DEBUG: %d: task_fork\n", p->pid); }
+{
+	printk("DEBUG: p->pid = %d, current->pid = %d: task_fork on_rq = %d\n", p->pid, current->pid, p->on_rq);
+	p->wrr.on_wrr_rq = 0;
+}
 
 void switched_from_wrr (struct rq *this_rq, struct task_struct *task)
 { printk("DEBUG: %d: twitched_from\n", task->pid); }
@@ -263,14 +280,15 @@ const struct sched_class wrr_sched_class = {
 	.get_rr_interval	= get_rr_interval_wrr
 };
 
+#ifdef CONFIG_SCHED_DEBUG
+extern void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq *wrr_rq);
+
 void print_wrr_stats(struct seq_file *m, int cpu)
 {
-	//rt_rq_iter_t iter;
-	struct wrr_rq *wrr_rq;
+	struct rq *rq;
 
-	rcu_read_lock();
-	//for_each_rt_rq(rt_rq, iter, cpu_rq(cpu))
-		//print_rt_rq(m, cpu, rt_rq);
-	rcu_read_unlock();
+	rq = cpu_rq(cpu);
+	print_wrr_rq(m, cpu, &rq->wrr);
 }
 
+#endif /* CONFIG_SCHED_DEBUG */
