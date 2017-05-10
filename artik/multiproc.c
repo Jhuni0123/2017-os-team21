@@ -9,7 +9,7 @@ int main()
 {
 	pid_t pid = getpid();
 	int nProc = 10;
-	int nSleep = 10;
+	int nSleep = 1E9;
 	int i = 1;
 
 	printf("Setting scheduler to WRR..\n");
@@ -32,8 +32,8 @@ int main()
 	while(cnt < nSleep)
 	{
 		cnt++;
-		printf("%dth process woken: %d\n", i, cnt);
-		sleep(1);
+		if(cnt % 1E8 == 0)
+			printf("%dth process woken: %d\n", i, cnt / 1E8);
 	}
 
 }
