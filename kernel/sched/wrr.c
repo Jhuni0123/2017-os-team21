@@ -4,12 +4,6 @@
 
 const struct sched_class wrr_sched_class;
 
-/*
- *********************************
- * Scheduler interface functions *
- *********************************
- */
-
 void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 {
 	wrr_rq->wrr_nr_running = 0;
@@ -66,6 +60,18 @@ static struct sched_wrr_entity *__pick_next_entity(struct wrr_rq *wrr_rq){
 
 	return next;
 }
+
+static void wrr_entity_tick(struct wrr_rq *wrr_rq, struct sched_wrr_entity *curr, int queued)
+{
+	/* update curr */
+	
+}
+
+/*
+ *********************************
+ * Scheduler interface functions *
+ *********************************
+ */
 
 void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 {
@@ -204,7 +210,16 @@ void set_curr_task_wrr (struct rq *rq)
 
 /* 이거 for load balancing */
 void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
-{ printk("DEBUG: %d: task_tick\n", p->pid); }
+{
+	struct wrr_rq *wrr_rq;
+	struct sched_wrr_entity *curr, *wrr = &p->wrr;
+	
+	list_for_each_entry(curr, wrr, queue_node) {
+		wrr_entity_tick(wrr_rq, curr, queued);
+	}
+	
+	// TODO: load balacing
+}
 
 // not in rt
 void task_fork_wrr (struct task_struct *p)
