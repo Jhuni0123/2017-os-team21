@@ -4,6 +4,7 @@
 #include <linux/sched/wrr.h>
 
 const struct sched_class wrr_sched_class;
+static int load_balance(void);
 
 void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 {
@@ -91,7 +92,7 @@ static void check_load_balance(struct wrr_rq *wrr_rq)
 
 	if(now > wrr_rq->next_balancing)
 	{
-		//load_balance();
+		load_balance();
 		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD;
 	}
 }
@@ -326,7 +327,7 @@ unsigned int get_rr_interval_wrr (struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
-static int load_balance()
+static int load_balance(void)
 {
 	int i;
 	int max_cpu = -1;
@@ -345,6 +346,11 @@ static int load_balance()
 			min_cpu = i;
 			min_weight = wrr_rq->weight_sum;
 		}
+	}
+
+	if(max_weight == 0 || min_weight == 0 || max_cpu == min_cpu){
+		printk("DEBUG: load_balancing not needed\n");
+		return -1;
 	}
 	
 	struct wrr_rq *max_wrr_rq = &cpu_rq(max_cpu)->wrr;
@@ -384,7 +390,8 @@ static int load_balance()
 		return -1;
 	}
 
-	list_move_tail(&to_move->queue_node, &min_wrr_rq->queue_head);
+	dequeue_task_wrr(max_wrr_rq->rq, wrr_task_of(to_move), 0);
+	enqueue_task_wrr(min_wrr_rq->rq, wrr_task_of(to_move), 0);
 
 	/* release lock for cpu max_cpu, min_cpu */
 	double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
