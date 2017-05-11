@@ -351,7 +351,7 @@ static int load_balance(void)
 	printk("DEBUG: max_cpu %d, max_weight %d, min_cpu %d, min_weight %d\n",
 			max_cpu, max_weight, min_cpu, min_weight);
 
-	if(max_weight == 0 || min_weight == 0 || max_cpu == min_cpu){
+	if(max_weight == 0 || max_cpu == min_cpu){
 		printk("DEBUG: load_balancing not needed\n");
 		return -1;
 	}
@@ -366,6 +366,11 @@ static int load_balance(void)
 	/* hold lock for both max and min cpus at the same time
 	 * before entering critical section */
 	double_rq_lock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+
+	if(max_wrr_rq->wrr_nr_running < 2){
+		printk("DEBUG: 0 or 1 entries in max_wrr_rq\n");
+		return -1;
+	}
 
 	first = list_first_entry_or_null(&max_wrr_rq->queue_head, struct sched_wrr_entity, queue_node);
 	
