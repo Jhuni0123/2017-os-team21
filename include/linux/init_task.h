@@ -169,7 +169,7 @@ extern struct task_group root_task_group;
 	.prio		= MAX_PRIO-20,					\
 	.static_prio	= MAX_PRIO-20,					\
 	.normal_prio	= MAX_PRIO-20,					\
-	.policy		= SCHED_NORMAL,					\
+	.policy		= SCHED_WRR,					\
 	.cpus_allowed	= CPU_MASK_ALL,					\
 	.nr_cpus_allowed= NR_CPUS,					\
 	.mm		= NULL,						\
@@ -184,6 +184,7 @@ extern struct task_group root_task_group;
 	.wrr		= {						\
 		.weight		= WRR_DEFAULT_WEIGHT,			\
 		.queue_node	= LIST_HEAD_INIT(tsk.wrr.queue_node),	\
+		.time_slice = WRR_DEFAULT_WEIGHT * WRR_TIMESLICE,	\
 	},								\
 	.tasks		= LIST_HEAD_INIT(tsk.tasks),			\
 	INIT_PUSHABLE_TASKS(tsk)					\

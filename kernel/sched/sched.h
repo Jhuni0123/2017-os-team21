@@ -368,6 +368,7 @@ struct wrr_rq {
 	struct list_head queue_head;
 	struct rq *rq;
 	int weight_sum;
+	u64 next_balancing;
 };
 
 /*
@@ -1037,6 +1038,7 @@ struct sched_class {
 
 extern const struct sched_class stop_sched_class;
 extern const struct sched_class rt_sched_class;
+extern const struct sched_class wrr_sched_class;
 extern const struct sched_class fair_sched_class;
 extern const struct sched_class idle_sched_class;
 
@@ -1334,6 +1336,7 @@ extern struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq);
 extern struct sched_entity *__pick_last_entity(struct cfs_rq *cfs_rq);
 extern void print_cfs_stats(struct seq_file *m, int cpu);
 extern void print_rt_stats(struct seq_file *m, int cpu);
+extern void print_wrr_stats(struct seq_file *m, int cpu);
 
 extern void init_cfs_rq(struct cfs_rq *cfs_rq);
 extern void init_rt_rq(struct rt_rq *rt_rq, struct rq *rq);
