@@ -352,14 +352,16 @@ static int load_balance()
 		}
 	}
 	
-	// hold lock for cpu max_cpu, min_cpu
-	
 	struct wrr_rq *max_wrr_rq = &cpu_rq(max_cpu)->wrr;
 	struct wrr_rq *min_wrr_rq = &cpu_rq(min_cpu)->wrr;
 	struct sched_wrr_entity *pos;
 	struct sched_wrr_entity *first;
 	struct sched_wrr_entity *to_move;
 	int move_weight = -1;
+
+	/* hold lock for both max and min cpus at the same time
+	 * before entering critical section */
+	double_rq_lock(cpu_rq(max_cpu), cpu_rq(min_cpu));
 
 	first = list_first_entry_or_null(&max_wrr_rq->queue_head, struct sched_wrr_entity, queue_node);
 	
@@ -382,7 +384,8 @@ static int load_balance()
 
 	list_move_tail(&to_move->queue_node, &min_wrr_rq->queue_head);
 
-	// release lock for cpu max_cpu, min_cpu
+	/* release lock for cpu max_cpu, min_cpu */
+	double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
 }
 
 /*
