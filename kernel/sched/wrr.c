@@ -391,7 +391,12 @@ static int load_balance(struct rq *this_rq)
 	
 	if(!first){
 		printk("DEBUG: no entry on max_wrr_rq at load_balance\n");
-		double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));	
+		if(is_this_cpu_candidate == 0)		
+			double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+		else if(is_this_cpu_candidate == 1)
+			double_unlock_balance(this_rq, cpu_rq(min_cpu));
+		else if(is_this_cpu_candidate == 2)
+			double_unlock_balance(this_rq, cpu_rq(max_cpu));
 		return -1;
 	}
 
@@ -409,7 +414,12 @@ static int load_balance(struct rq *this_rq)
 
 	if(!to_move){
 		printk("DEBUG: nothing qualified to move\n");
-		double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+		if(is_this_cpu_candidate == 0)		
+			double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+		else if(is_this_cpu_candidate == 1)
+			double_unlock_balance(this_rq, cpu_rq(min_cpu));
+		else if(is_this_cpu_candidate == 2)
+			double_unlock_balance(this_rq, cpu_rq(max_cpu));
 		return -1;
 	}
 
@@ -417,7 +427,12 @@ static int load_balance(struct rq *this_rq)
 	enqueue_task_wrr(min_wrr_rq->rq, wrr_task_of(to_move), 0);
 
 	/* release lock for cpu max_cpu, min_cpu */
-	double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+	if(is_this_cpu_candidate == 0)		
+		double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+	else if(is_this_cpu_candidate == 1)
+		double_unlock_balance(this_rq, cpu_rq(min_cpu));
+	else if(is_this_cpu_candidate == 2)
+		double_unlock_balance(this_rq, cpu_rq(max_cpu));
 
 	return 0;
 }
