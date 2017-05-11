@@ -19,11 +19,6 @@ static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
 	return container_of(wrr_se, struct task_struct, wrr);
 }
 
-static inline struct wrr_rq *wrr_rq_of_se(struct sched_wrr_entity *wrr_se)
-{
-	return wrr_se->wrr_rq;
-}
-
 static inline void __enqueue_wrr_entity(struct wrr_rq *wrr_rq, struct sched_wrr_entity *wrr_se)
 {
 	list_add_tail(&wrr_se->queue_node, &wrr_rq->queue_head);
@@ -278,7 +273,7 @@ void set_curr_task_wrr (struct rq *rq)
 void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
 {
 	struct sched_wrr_entity *wrr_se = &p->wrr;
-	struct wrr_rq *wrr_rq = wrr_se->wrr_rq;
+	struct wrr_rq *wrr_rq = &rq->wrr;
 
 	update_curr_wrr(rq);
 	
