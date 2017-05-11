@@ -4,7 +4,7 @@
 #include <linux/sched/wrr.h>
 
 const struct sched_class wrr_sched_class;
-static int load_balance(void);
+static int load_balance(struct rq *this_rq);
 
 void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 {
@@ -93,7 +93,7 @@ static void check_load_balance(struct wrr_rq *wrr_rq)
 	if(now > wrr_rq->next_balancing)
 	{
 		printk("DEBUG: now : %lld, next_balancing : %lld\n", now, wrr_rq->next_balancing);
-		load_balance();
+		load_balance(wrr_rq->rq);
 		/* unit of now, next_balancing is nsec */
 		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD * 1000000000LL;
 	}
@@ -124,7 +124,7 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 	inc_nr_running(rq);
 	wrr_rq->wrr_nr_running++;
 	wrr_rq->weight_sum += wrr_se->weight;
-  wrr_se->on_wrr_rq = 1; 
+	wrr_se->on_wrr_rq = 1; 
 }
 
 void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
@@ -330,7 +330,7 @@ unsigned int get_rr_interval_wrr (struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
-static int load_balance(void)
+static int load_balance(struct rq *this_rq)
 {
 	int i;
 	int max_cpu = -1;
@@ -365,10 +365,22 @@ static int load_balance(void)
 	struct sched_wrr_entity *first;
 	struct sched_wrr_entity *to_move;
 	int move_weight = -1;
+	int is_this_cpu_candidate = 0; // 0: not candidate 1: max_wrr_rq 2: min_wrr_rq
+
+	if(this_rq->cpu == max_cpu)
+		is_this_cpu_candidate = 1;
+	else if(this_rq->cpu == min_cpu)
+		is_this_cpu_candidate = 2;
+	
 
 	/* hold lock for both max and min cpus at the same time
 	 * before entering critical section */
-	double_rq_lock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+	if(is_this_cpu_candidate == 0)		
+		double_rq_lock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+	else if(is_this_cpu_candidate == 1)
+		double_lock_balance(this_rq, cpu_rq(min_cpu));
+	else if(is_this_cpu_candidate == 2)
+		double_lock_balance(this_rq, cpu_rq(max_cpu));
 
 	if(max_wrr_rq->wrr_nr_running < 2){
 		printk("DEBUG: 0 or 1 entries in max_wrr_rq\n");
@@ -406,6 +418,8 @@ static int load_balance(void)
 
 	/* release lock for cpu max_cpu, min_cpu */
 	double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+
+	return 0;
 }
 
 /*
