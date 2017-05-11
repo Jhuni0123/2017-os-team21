@@ -362,6 +362,7 @@ static int load_balance()
 	
 	if(!first){
 		printk("DEBUG: no entry on max_wrr_rq at load_balance\n");
+		double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));	
 		return -1;
 	}
 
@@ -375,6 +376,12 @@ static int load_balance()
 			to_move = pos;
 			move_weight = pos->weight;
 		}
+	}
+
+	if(!to_move){
+		printk("DEBUG: nothing qualified to move\n");
+		double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+		return -1;
 	}
 
 	list_move_tail(&to_move->queue_node, &min_wrr_rq->queue_head);
