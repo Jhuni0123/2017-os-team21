@@ -262,10 +262,11 @@ void print_rt_rq(struct seq_file *m, int cpu, struct rt_rq *rt_rq)
 #undef P
 }
 
-/*void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq *wrr_rq)
+void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq *wrr_rq)
 {
-
-}*/
+	SEQ_printf(m, "\nwrr_rq[%d]:\n", cpu);
+	SEQ_printf(m, "  .%-30s: %Ld\n", "wrr_nr_running", (long long)(wrr_rq->wrr_nr_running));
+}
 
 extern __read_mostly int sched_clock_running;
 
@@ -334,6 +335,7 @@ do {									\
 	spin_lock_irqsave(&sched_debug_lock, flags);
 	print_cfs_stats(m, cpu);
 	print_rt_stats(m, cpu);
+	print_wrr_stats(m, cpu);
 
 	rcu_read_lock();
 	print_rq(m, rq, cpu);
