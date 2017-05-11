@@ -266,6 +266,7 @@ void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq *wrr_rq)
 {
 	SEQ_printf(m, "\nwrr_rq[%d]:\n", cpu);
 	SEQ_printf(m, "  .%-30s: %Ld\n", "wrr_nr_running", (long long)(wrr_rq->wrr_nr_running));
+	SEQ_printf(m, "  .%-30s: %Ld\n", "weight_sum", (long long)(wrr_rq->weight_sum));
 }
 
 extern __read_mostly int sched_clock_running;

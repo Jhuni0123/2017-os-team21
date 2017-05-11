@@ -3,8 +3,14 @@
 
 #include <linux/sched.h>
 
+#define WRR_MIN_WEIGHT 1
+#define WRR_MAX_WEIGHT 20
 #define WRR_DEFAULT_WEIGHT 10
+
+/* 10 msec */
 #define WRR_TIMESLICE (10 * HZ / 1000)
-#define WRR_BALANCE_PERIOD (2000 * HZ / 1000)
+
+/* 2 sec */
+#define WRR_BALANCE_PERIOD 2
 
 #endif /* _SCHED_WRR_H */

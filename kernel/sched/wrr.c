@@ -92,8 +92,10 @@ static void check_load_balance(struct wrr_rq *wrr_rq)
 
 	if(now > wrr_rq->next_balancing)
 	{
+		printk("DEBUG: now : %lld, next_balancing : %lld\n", now, wrr_rq->next_balancing);
 		load_balance();
-		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD;
+		/* unit of now, next_balancing is nsec */
+		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD * 1000000000LL;
 	}
 }
 
@@ -108,6 +110,7 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 	//printk("DEBUG: %d: enqueue\n", p->pid);
 
 	struct wrr_rq *wrr_rq = &rq->wrr;
+
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	//todo: how to handle flags?
 
