@@ -348,6 +348,9 @@ static int load_balance(void)
 		}
 	}
 
+	printk("DEBUG: max_cpu %d, max_weight %d, min_cpu %d, min_weight %d\n",
+			max_cpu, max_weight, min_cpu, min_weight);
+
 	if(max_weight == 0 || min_weight == 0 || max_cpu == min_cpu){
 		printk("DEBUG: load_balancing not needed\n");
 		return -1;
