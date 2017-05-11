@@ -367,6 +367,8 @@ struct wrr_rq {
 	struct sched_wrr_entity *curr;
 	struct list_head queue_head;
 	struct rq *rq;
+
+	u64 next_balancing;
 };
 
 /*

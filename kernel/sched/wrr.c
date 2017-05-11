@@ -1,14 +1,9 @@
 #include "sched.h"
 #include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/sched/wrr.h>
 
 const struct sched_class wrr_sched_class;
-
-/*
- *********************************
- * Scheduler interface functions *
- *********************************
- */
 
 void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 {
@@ -16,7 +11,7 @@ void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 	wrr_rq->curr = NULL;
 	INIT_LIST_HEAD(&wrr_rq->queue_head);
 	wrr_rq->rq = rq;
-
+	wrr_rq->next_balancing = 0;
 }
 
 static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
@@ -67,6 +62,51 @@ static struct sched_wrr_entity *__pick_next_entity(struct wrr_rq *wrr_rq){
 	return next;
 }
 
+static void update_curr_wrr(struct rq *rq)
+{
+	struct task_struct *curr = rq->curr;
+	u64 delta_exec;
+
+	if(curr->sched_class != &wrr_sched_class)
+		return;
+
+	delta_exec = rq->clock_task - curr->se.exec_start;
+	if(unlikely((s64)delta_exec <= 0))
+		return;
+
+	/* update schedstat */
+	schedstat_set(curr->se.statistics.exec_max,
+			  max(curr->se.statistics.exec_max, delta_exec));
+	curr->se.sum_exec_runtime += delta_exec;
+	account_group_exec_runtime(curr, delta_exec);
+	curr->se.exec_start = rq->clock_task;
+	cpuacct_charge(curr, delta_exec);
+}
+
+static void check_load_balance(struct wrr_rq *wrr_rq)
+{
+	u64 now = wrr_rq->rq->clock_task;
+	unsigned long delta_exec;
+	
+	if(wrr_rq->next_balancing == 0)
+	{
+		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD;
+		return;
+	}
+
+	if(now > wrr_rq->next_balancing)
+	{
+		//load_balance();
+		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD;
+	}
+}
+
+/*
+ *********************************
+ * Scheduler interface functions *
+ *********************************
+ */
+
 void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 {
 	//printk("DEBUG: %d: enqueue\n", p->pid);
@@ -99,7 +139,7 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 		//printk("DEBUG: %d: not on wrr rq\n", p->pid);
 		return;
 	}
-
+	
 	__dequeue_wrr_entity(wrr_se);
 
 	dec_nr_running(rq);
@@ -156,7 +196,7 @@ struct task_struct *pick_next_task_wrr (struct rq *rq)
 
 	//printk("DEBUG: pick_next_task %d\n", p->pid);
 
-	wrr_se->time_slice = wrr_se->weight * 2;
+	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
 
 	return p;
 }
@@ -235,20 +275,30 @@ void set_curr_task_wrr (struct rq *rq)
 	//printk("DEBUG: set_curr_task_wrr\n");
 }
 
-/* 이거 for load balancing */
 void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
 {
-	//printk("DEBUG: %d: task_tick\n", p->pid);
+	struct sched_wrr_entity *wrr_se = &p->wrr;
+	struct wrr_rq *wrr_rq = wrr_se->wrr_rq;
 
-	if (p->policy != SCHED_WRR)
+	update_curr_wrr(rq);
+	
+	if(p->policy != SCHED_WRR)
+		return;
+	
+	/* Check if load balancing is needed */
+	unsigned int first_cpu = cpumask_first(cpu_online_mask);
+	if(rq->cpu == first_cpu)
+		check_load_balance(wrr_rq);
+	
+	/* Decrease time slice of task */
+	if(--wrr_se->time_slice)
 		return;
 
-	if (--p->wrr.time_slice)
-		return;
-
-	//printk("DEBUG: pid %d time_slice is ZERO\n", p->pid);
-	__requeue_wrr_entity(&p->wrr, &rq->wrr);
-	set_tsk_need_resched(p);
+	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
+	if(wrr_rq->queue_head.prev != wrr_rq->queue_head.next) { // If n_item > 2
+		__requeue_wrr_entity(wrr_se, wrr_rq);
+		set_tsk_need_resched(p);
+	}
 }
 
 // not in rt

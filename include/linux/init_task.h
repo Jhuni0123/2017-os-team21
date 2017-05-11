@@ -184,6 +184,7 @@ extern struct task_group root_task_group;
 	.wrr		= {						\
 		.weight		= WRR_DEFAULT_WEIGHT,			\
 		.queue_node	= LIST_HEAD_INIT(tsk.wrr.queue_node),	\
+		.time_slice = WRR_DEFAULT_WEIGHT * WRR_TIMESLICE,	\
 	},								\
 	.tasks		= LIST_HEAD_INIT(tsk.tasks),			\
 	INIT_PUSHABLE_TASKS(tsk)					\
