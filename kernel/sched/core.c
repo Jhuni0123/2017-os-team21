@@ -3858,6 +3858,7 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 	p->prio = rt_mutex_getprio(p);
 	if (policy == SCHED_WRR) {
 		p->sched_class = &wrr_sched_class;
+		p->wrr.weight = WRR_DEFAULT_WEIGHT;
 	}
 	else if (rt_prio(p->prio)) {
 		p->sched_class = &rt_sched_class;
