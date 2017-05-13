@@ -12,7 +12,7 @@ void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 	wrr_rq->curr = NULL;
 	INIT_LIST_HEAD(&wrr_rq->queue_head);
 	wrr_rq->rq = rq;
-	wrr_rq->next_balancing = 30000000000LL;
+	wrr_rq->next_balancing = 0;
 }
 
 static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
