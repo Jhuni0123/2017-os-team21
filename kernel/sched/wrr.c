@@ -4,6 +4,7 @@
 #include <linux/sched/wrr.h>
 
 const struct sched_class wrr_sched_class;
+static int load_balance(struct rq *this_rq);
 
 void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 {
@@ -11,7 +12,7 @@ void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 	wrr_rq->curr = NULL;
 	INIT_LIST_HEAD(&wrr_rq->queue_head);
 	wrr_rq->rq = rq;
-	wrr_rq->next_balancing = 0;
+	wrr_rq->next_balancing = 30000000000LL;
 }
 
 static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
@@ -91,8 +92,10 @@ static void check_load_balance(struct wrr_rq *wrr_rq)
 
 	if(now > wrr_rq->next_balancing)
 	{
-		//load_balance();
-		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD;
+		printk("DEBUG: now : %lld, next_balancing : %lld\n", now, wrr_rq->next_balancing);
+		load_balance(wrr_rq->rq);
+		/* unit of now, next_balancing is nsec */
+		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD * 1000000000LL;
 	}
 }
 
@@ -107,6 +110,7 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 	//printk("DEBUG: %d: enqueue\n", p->pid);
 
 	struct wrr_rq *wrr_rq = &rq->wrr;
+
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	//todo: how to handle flags?
 
@@ -119,7 +123,8 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 	inc_nr_running(rq);
 	wrr_rq->wrr_nr_running++;
-	wrr_se->on_wrr_rq = 1;
+	wrr_rq->weight_sum += wrr_se->weight;
+	wrr_se->on_wrr_rq = 1; 
 }
 
 void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
@@ -139,6 +144,7 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 	dec_nr_running(rq);
 	wrr_rq->wrr_nr_running--;
+	wrr_rq->weight_sum -= wrr_se->weight;
 	wrr_se->on_wrr_rq = 0;
 }
 
@@ -324,6 +330,94 @@ unsigned int get_rr_interval_wrr (struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
+static int load_balance(struct rq *this_rq)
+{
+	printk("DEBUG: rq %d, load_balance called\n", this_rq->cpu);
+	int i;
+	int max_cpu = -1;
+	int min_cpu = -1;
+	int max_weight = -1;
+	int min_weight = 1000000000;
+	unsigned long flags;
+
+	for_each_possible_cpu(i){
+		struct rq *rq = cpu_rq(i);
+		struct wrr_rq *wrr_rq = &rq->wrr;
+		if(max_weight < wrr_rq->weight_sum){
+			max_cpu = i;
+			max_weight = wrr_rq->weight_sum;
+		}
+		if(min_weight > wrr_rq->weight_sum){
+			min_cpu = i;
+			min_weight = wrr_rq->weight_sum;
+		}
+	}
+
+	printk("DEBUG: max_cpu %d, max_weight %d, min_cpu %d, min_weight %d\n",
+			max_cpu, max_weight, min_cpu, min_weight);
+
+	if(max_weight == 0 || max_cpu == min_cpu){
+		printk("DEBUG: load_balancing not needed\n");
+		return -1;
+	}
+	
+	struct wrr_rq *max_wrr_rq = &cpu_rq(max_cpu)->wrr;
+	struct wrr_rq *min_wrr_rq = &cpu_rq(min_cpu)->wrr;
+	struct sched_wrr_entity *pos;
+	struct sched_wrr_entity *to_move = NULL;
+	int movable_weight = (max_weight - min_weight - 1) / 2;
+	int move_weight = -1;
+	int is_this_cpu_candidate = 0; // 0: not candidate 1: max_wrr_rq 2: min_wrr_rq
+
+	if(this_rq->cpu == max_cpu)
+		is_this_cpu_candidate = 1;
+	else if(this_rq->cpu == min_cpu)
+		is_this_cpu_candidate = 2;
+	
+
+	if(max_wrr_rq->wrr_nr_running < 2){
+		printk("DEBUG: 0 or 1 entries in max_wrr_rq\n");
+		return -1;
+	}
+
+	/* hold lock for both max and min cpus at the same time
+	 * before entering critical section */
+	local_irq_save(flags);
+	if(is_this_cpu_candidate == 0)		
+		double_rq_lock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+	else if(is_this_cpu_candidate == 1)
+		double_lock_balance(this_rq, cpu_rq(min_cpu));
+	else if(is_this_cpu_candidate == 2)
+		double_lock_balance(this_rq, cpu_rq(max_cpu));
+	printk("DEBUG: load_balance successfully lock max:%d min:%d queue\n", max_cpu, min_cpu);
+
+	list_for_each_entry(pos, &max_wrr_rq->queue_head, queue_node){
+		if(pos->weight <= movable_weight && pos->weight > move_weight && wrr_task_of(pos) != max_wrr_rq->rq->curr && cpumask_test_cpu(min_cpu, tsk_cpus_allowed(wrr_task_of(pos)))) {
+			to_move = pos;
+			move_weight = pos->weight;
+		}
+	}
+
+	if (to_move) {
+		deactivate_task(max_wrr_rq->rq, wrr_task_of(to_move), 0);
+		set_task_cpu(wrr_task_of(to_move), min_cpu);
+		activate_task(min_wrr_rq->rq, wrr_task_of(to_move), 0);
+		printk("DEBUG: load_balance successfully move task from:%d to:%d queue\n", max_cpu, min_cpu);
+
+	}
+
+	/* release lock for cpu max_cpu, min_cpu */
+	if(is_this_cpu_candidate == 0)		
+		double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+	else if(is_this_cpu_candidate == 1)
+		double_unlock_balance(this_rq, cpu_rq(min_cpu));
+	else if(is_this_cpu_candidate == 2)
+		double_unlock_balance(this_rq, cpu_rq(max_cpu));
+	printk("DEBUG: load_balance successfully unlock max:%d min:%d queue\n", max_cpu, min_cpu);
+	local_irq_restore(flags);
+
+	return 0;
+}
 
 /*
  * Scheduling class
