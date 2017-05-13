@@ -287,10 +287,11 @@ void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
 		return;
 	
 	/* Check if load balancing is needed */
+#ifdef CONFIG_SMP
 	unsigned int first_cpu = cpumask_first(cpu_online_mask);
 	if(rq->cpu == first_cpu)
 		check_load_balance(wrr_rq);
-	
+#endif
 	/* Decrease time slice of task */
 	if(--wrr_se->time_slice)
 		return;
