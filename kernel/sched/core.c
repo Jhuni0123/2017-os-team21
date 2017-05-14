@@ -8161,3 +8161,58 @@ void dump_cpu_task(int cpu)
 	pr_info("Task dump for CPU %d:\n", cpu);
 	sched_show_task(cpu_curr(cpu));
 }
+
+struct task_struct* find_wrr_task_by_vpid(pid_t pid)
+{
+	if(pid < 0)
+		return NULL;
+	struct task_struct* task;
+	if(pid == 0)
+		task = current;
+	else
+		task = find_task_by_vpid(pid);
+	// maybe use "task->sched_class != &wrr_sched-class"?
+	if(task == NULL || task->policy != SCHED_WRR)
+		return NULL;
+	return task;
+}
+
+int do_sched_setweight(pid_t pid, int weight)
+{
+	if(weight <= 0 || weight > 20)
+		return -EINVAL;
+	struct task_struct* task = find_wrr_task_by_vpid(pid);
+	if(task == NULL)
+		return -EINVAL;
+	
+	/* Checking permissions.
+	 * Uncomment after scheduler debugging is done.
+	
+	bool root = (current_uid().val == 0);
+	if(!root && !check_same_owner(task))
+		return -EPERM;
+	if(!root && (task->wrr.weight < weight))
+		return -EPERM;
+	*/
+	task->wrr.weight = weight;
+	return 0;
+}
+
+int do_sched_getweight(pid_t pid)
+{
+	struct task_struct* task = find_wrr_task_by_vpid(pid);
+	if(task == NULL)
+		return -EINVAL;
+	return task->wrr.weight;
+}
+
+SYSCALL_DEFINE2(sched_setweight, pid_t, pid, int, weight)
+{
+	return do_sched_setweight(pid, weight);
+}
+
+SYSCALL_DEFINE1(sched_getweight, pid_t, pid)
+{
+	return do_sched_getweight(pid);
+}
+
