@@ -77,7 +77,7 @@ static void update_curr_wrr(struct rq *rq)
 	cpuacct_charge(curr, delta_exec);
 }
 
-static void check_load_balance(struct wrr_rq *wrr_rq)
+static void check_load_balance_wrr(struct wrr_rq *wrr_rq)
 {
 	u64 now = wrr_rq->rq->clock_task;
 	unsigned long delta_exec;
@@ -95,6 +95,13 @@ static void check_load_balance(struct wrr_rq *wrr_rq)
 	}
 }
 
+void trigger_load_balance_wrr(struct rq *rq, int cpu)
+{
+	/* Check if load balancing is needed */
+	unsigned int first_cpu = cpumask_first(cpu_online_mask);
+	if(cpu == first_cpu)
+		check_load_balance_wrr(&rq->wrr);
+}
 /*
  *********************************
  * Scheduler interface functions *
@@ -187,7 +194,18 @@ void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
 int  select_task_rq_wrr (struct task_struct *p, int sd_flag, int flags)
 {
 	//printk("DEBUG: %d: select_task_rq\n", p->pid);
-	return 0;
+	int i;
+	int min_weight_sum = 1000000000;
+	int min_cpu = -1;
+	for_each_possible_cpu(i){
+		struct rq *rq = cpu_rq(i);
+		struct wrr_rq *wrr_rq = &rq->wrr;
+		if(min_weight_sum > wrr_rq->weight_sum){
+			min_cpu = i;
+			min_weight_sum = wrr_rq->weight_sum;
+		}
+	}
+	return min_cpu;
 }
 
 void migrate_task_rq_wrr (struct task_struct *p, int next_cpu)
@@ -246,12 +264,6 @@ void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
 	if(p->policy != SCHED_WRR)
 		return;
 	
-	/* Check if load balancing is needed */
-#ifdef CONFIG_SMP
-	unsigned int first_cpu = cpumask_first(cpu_online_mask);
-	if(rq->cpu == first_cpu)
-		check_load_balance(wrr_rq);
-#endif
 	/* Decrease time slice of task */
 	if(--wrr_se->time_slice)
 		return;
@@ -290,6 +302,7 @@ unsigned int get_rr_interval_wrr (struct rq *rq, struct task_struct *task)
 	return 0;
 }
 
+/* no runqueues are locked when call load_balance */
 static int load_balance(struct rq *this_rq)
 {
 	printk("DEBUG: rq %d, load_balance called\n", this_rq->cpu);
@@ -327,13 +340,6 @@ static int load_balance(struct rq *this_rq)
 	struct sched_wrr_entity *to_move = NULL;
 	int movable_weight = (max_weight - min_weight - 1) / 2;
 	int move_weight = -1;
-	int is_this_cpu_candidate = 0; // 0: not candidate 1: max_wrr_rq 2: min_wrr_rq
-
-	if(this_rq->cpu == max_cpu)
-		is_this_cpu_candidate = 1;
-	else if(this_rq->cpu == min_cpu)
-		is_this_cpu_candidate = 2;
-	
 
 	if(max_wrr_rq->wrr_nr_running < 2){
 		printk("DEBUG: 0 or 1 entries in max_wrr_rq\n");
@@ -343,14 +349,9 @@ static int load_balance(struct rq *this_rq)
 	/* hold lock for both max and min cpus at the same time
 	 * before entering critical section */
 	local_irq_save(flags);
-	if(is_this_cpu_candidate == 0)		
-		double_rq_lock(cpu_rq(max_cpu), cpu_rq(min_cpu));
-	else if(is_this_cpu_candidate == 1)
-		double_lock_balance(this_rq, cpu_rq(min_cpu));
-	else if(is_this_cpu_candidate == 2)
-		double_lock_balance(this_rq, cpu_rq(max_cpu));
-	printk("DEBUG: load_balance successfully lock max:%d min:%d queue\n", max_cpu, min_cpu);
+	double_rq_lock(cpu_rq(max_cpu), cpu_rq(min_cpu));
 
+	printk("DEBUG: load_balance successfully lock max:%d min:%d queue\n", max_cpu, min_cpu);
 	list_for_each_entry(pos, &max_wrr_rq->queue_head, queue_node){
 		if(pos->weight <= movable_weight && pos->weight > move_weight && wrr_task_of(pos) != max_wrr_rq->rq->curr && cpumask_test_cpu(min_cpu, tsk_cpus_allowed(wrr_task_of(pos)))) {
 			to_move = pos;
@@ -362,17 +363,12 @@ static int load_balance(struct rq *this_rq)
 		deactivate_task(max_wrr_rq->rq, wrr_task_of(to_move), 0);
 		set_task_cpu(wrr_task_of(to_move), min_cpu);
 		activate_task(min_wrr_rq->rq, wrr_task_of(to_move), 0);
-		printk("DEBUG: load_balance successfully move task from:%d to:%d queue\n", max_cpu, min_cpu);
+		printk("DEBUG: load_balance successfully move task %d from:%d to:%d queue\n", wrr_task_of(to_move)->pid, max_cpu, min_cpu);
 
 	}
 
 	/* release lock for cpu max_cpu, min_cpu */
-	if(is_this_cpu_candidate == 0)		
-		double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
-	else if(is_this_cpu_candidate == 1)
-		double_unlock_balance(this_rq, cpu_rq(min_cpu));
-	else if(is_this_cpu_candidate == 2)
-		double_unlock_balance(this_rq, cpu_rq(max_cpu));
+	double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
 	printk("DEBUG: load_balance successfully unlock max:%d min:%d queue\n", max_cpu, min_cpu);
 	local_irq_restore(flags);
 
