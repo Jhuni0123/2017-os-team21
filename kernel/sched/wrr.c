@@ -194,7 +194,18 @@ void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
 int  select_task_rq_wrr (struct task_struct *p, int sd_flag, int flags)
 {
 	//printk("DEBUG: %d: select_task_rq\n", p->pid);
-	return 0;
+	int i;
+	int min_weight_sum = 1000000000;
+	int min_cpu = -1;
+	for_each_possible_cpu(i){
+		struct rq *rq = cpu_rq(i);
+		struct wrr_rq *wrr_rq = &rq->wrr;
+		if(min_weight_sum > wrr_rq->weight_sum){
+			min_cpu = i;
+			min_weight_sum = wrr_rq->weight_sum;
+		}
+	}
+	return min_cpu;
 }
 
 void migrate_task_rq_wrr (struct task_struct *p, int next_cpu)
