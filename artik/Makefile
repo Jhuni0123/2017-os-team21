@@ -1,12 +1,12 @@
 CC = arm-linux-gnueabi-gcc
 
-all:  loop loop-sleep
+all: multiproc plot
 
-loop:
-	$(CC) -o loop loop.c
+multiproc: multiproc.c
+	$(CC) -o multiproc multiproc.c
 
-loop-sleep:
-	$(CC) -o loop-sleep loop-sleep.c
+plot: plot.c
+	$(CC) -o plot plot.c
 
 clean:
-	rm -f *.o loop loop-sleep
+	rm -f multiproc plot
