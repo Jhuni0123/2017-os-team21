@@ -1,11 +1,11 @@
 CC = arm-linux-gnueabi-gcc
 
-all: clean multiproc plot
+all: multiproc plot
 
-multiproc:
+multiproc: multiproc.c
 	$(CC) -o multiproc multiproc.c
 
-plot:
+plot: plot.c
 	$(CC) -o plot plot.c
 
 clean:
