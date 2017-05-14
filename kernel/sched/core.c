@@ -8165,9 +8165,10 @@ void dump_cpu_task(int cpu)
 
 struct task_struct* find_wrr_task_by_vpid(pid_t pid)
 {
+	struct task_struct* task;
+
 	if(pid < 0)
 		return NULL;
-	struct task_struct* task;
 	if(pid == 0)
 		task = current;
 	else
@@ -8180,21 +8181,23 @@ struct task_struct* find_wrr_task_by_vpid(pid_t pid)
 
 int do_sched_setweight(pid_t pid, int weight)
 {
+	struct task_struct *task;
+	bool root;
+
 	if(weight <= 0 || weight > 20)
 		return -EINVAL;
-	struct task_struct* task = find_wrr_task_by_vpid(pid);
+	task = find_wrr_task_by_vpid(pid);
 	if(task == NULL)
 		return -EINVAL;
 	
-	/* Checking permissions.
-	 * Uncomment after scheduler debugging is done.
+	/* Checking permissions. */
 	
-	bool root = (current_uid().val == 0);
+	root = (current_uid() == 0);
 	if(!root && !check_same_owner(task))
 		return -EPERM;
 	if(!root && (task->wrr.weight < weight))
 		return -EPERM;
-	*/
+
 	task->wrr.weight = weight;
 	return 0;
 }

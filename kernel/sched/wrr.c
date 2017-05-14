@@ -80,7 +80,6 @@ static void update_curr_wrr(struct rq *rq)
 static void check_load_balance_wrr(struct wrr_rq *wrr_rq)
 {
 	u64 now = wrr_rq->rq->clock_task;
-	unsigned long delta_exec;
 	
 	if(wrr_rq->next_balancing == 0) {
 		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD;
@@ -305,14 +304,20 @@ unsigned int get_rr_interval_wrr (struct rq *rq, struct task_struct *task)
 /* no runqueues are locked when call load_balance */
 static int load_balance(struct rq *this_rq)
 {
-	printk("DEBUG: rq %d, load_balance called\n", this_rq->cpu);
 	int i;
 	int max_cpu = -1;
 	int min_cpu = -1;
 	int max_weight = -1;
 	int min_weight = 1000000000;
 	unsigned long flags;
+	struct wrr_rq *max_wrr_rq;
+	struct wrr_rq *min_wrr_rq;
+	struct sched_wrr_entity *pos;
+	struct sched_wrr_entity *to_move;
+	int movable_weight;
+	int move_weight = -1;
 
+	printk("DEBUG: rq %d, load_balance called\n", this_rq->cpu);
 	for_each_possible_cpu(i){
 		struct rq *rq = cpu_rq(i);
 		struct wrr_rq *wrr_rq = &rq->wrr;
@@ -326,6 +331,9 @@ static int load_balance(struct rq *this_rq)
 		}
 	}
 
+	movable_weight = (max_weight - min_weight - 1) / 2;
+
+
 	printk("DEBUG: max_cpu %d, max_weight %d, min_cpu %d, min_weight %d\n",
 			max_cpu, max_weight, min_cpu, min_weight);
 
@@ -334,12 +342,8 @@ static int load_balance(struct rq *this_rq)
 		return -1;
 	}
 	
-	struct wrr_rq *max_wrr_rq = &cpu_rq(max_cpu)->wrr;
-	struct wrr_rq *min_wrr_rq = &cpu_rq(min_cpu)->wrr;
-	struct sched_wrr_entity *pos;
-	struct sched_wrr_entity *to_move = NULL;
-	int movable_weight = (max_weight - min_weight - 1) / 2;
-	int move_weight = -1;
+	max_wrr_rq = &cpu_rq(max_cpu)->wrr;
+	min_wrr_rq = &cpu_rq(max_cpu)->wrr;
 
 	if(max_wrr_rq->wrr_nr_running < 2){
 		printk("DEBUG: 0 or 1 entries in max_wrr_rq\n");
@@ -352,6 +356,9 @@ static int load_balance(struct rq *this_rq)
 	double_rq_lock(cpu_rq(max_cpu), cpu_rq(min_cpu));
 
 	printk("DEBUG: load_balance successfully lock max:%d min:%d queue\n", max_cpu, min_cpu);
+
+	to_move = NULL;
+
 	list_for_each_entry(pos, &max_wrr_rq->queue_head, queue_node){
 		if(pos->weight <= movable_weight && pos->weight > move_weight && wrr_task_of(pos) != max_wrr_rq->rq->curr && cpumask_test_cpu(min_cpu, tsk_cpus_allowed(wrr_task_of(pos)))) {
 			to_move = pos;
