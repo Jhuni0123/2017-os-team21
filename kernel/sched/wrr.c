@@ -204,6 +204,7 @@ int  select_task_rq_wrr (struct task_struct *p, int sd_flag, int flags)
 	int min_cpu = -1;
 
 	/* find minimum weight_sum cpu */
+	rcu_read_lock();
 	for_each_possible_cpu(i){
 		struct rq *rq = cpu_rq(i);
 		struct wrr_rq *wrr_rq = &rq->wrr;
@@ -214,6 +215,7 @@ int  select_task_rq_wrr (struct task_struct *p, int sd_flag, int flags)
 			min_weight_sum = wrr_rq->weight_sum;
 		}
 	}
+	rcu_read_unlock();
 	return min_cpu;
 }
 
@@ -313,6 +315,7 @@ static int load_balance(struct rq *this_rq)
 	int movable_weight;
 	int move_weight = -1;
 
+	rcu_read_lock();
 	for_each_possible_cpu(i){
 		struct rq *rq = cpu_rq(i);
 		int weight_sum = rq->wrr.weight_sum;
@@ -325,6 +328,7 @@ static int load_balance(struct rq *this_rq)
 			min_weight = weight_sum;
 		}
 	}
+	rcu_read_unlock();
 
 	if(max_weight == 0 || max_cpu == min_cpu){
 		return 0;
