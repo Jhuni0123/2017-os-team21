@@ -3,6 +3,9 @@
 #include <linux/list.h>
 #include <linux/sched/wrr.h>
 
+#define for_each_sched_wrr_entity(pos, wrr_rq)	\
+	list_for_each_entry(pos, &(wrr_rq)->queue_head, queue_node)
+
 const struct sched_class wrr_sched_class;
 static int load_balance(struct rq *this_rq);
 
@@ -80,7 +83,6 @@ static void update_curr_wrr(struct rq *rq)
 static void check_load_balance_wrr(struct wrr_rq *wrr_rq)
 {
 	u64 now = wrr_rq->rq->clock_task;
-	unsigned long delta_exec;
 	
 	if(wrr_rq->next_balancing == 0) {
 		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD;
@@ -97,10 +99,22 @@ static void check_load_balance_wrr(struct wrr_rq *wrr_rq)
 
 void trigger_load_balance_wrr(struct rq *rq, int cpu)
 {
-	/* Check if load balancing is needed */
+	/* only the first cpu call load balance */
 	unsigned int first_cpu = cpumask_first(cpu_online_mask);
 	if(cpu == first_cpu)
 		check_load_balance_wrr(&rq->wrr);
+}
+
+void move_task_wrr(struct rq *src_rq, struct rq *dst_rq, struct task_struct *p)
+{
+	deactivate_task(src_rq, p, 0);
+	set_task_cpu(p, cpu_of(dst_rq));
+	activate_task(dst_rq, p, 0);
+}
+
+bool can_move_task_wrr(struct rq *src_rq, struct rq *dst_rq, struct task_struct *p)
+{
+	return p != src_rq->curr && cpumask_test_cpu(cpu_of(dst_rq), tsk_cpus_allowed(p));
 }
 /*
  *********************************
@@ -110,7 +124,6 @@ void trigger_load_balance_wrr(struct rq *rq, int cpu)
 
 void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 {
-	//printk("DEBUG: %d: enqueue\n", p->pid);
 	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 
@@ -127,7 +140,6 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 {
-	//printk("DEBUG: %d: dequeue\n", p->pid);
 	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 
@@ -144,7 +156,6 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 
 void yield_task_wrr (struct rq *rq)
 {
-	//printk("DEBUG: yield_task\n");
 	struct wrr_rq *wrr_rq = &rq->wrr;
 	struct task_struct *curr = rq->curr;
 	struct sched_wrr_entity *wrr_se = &curr->wrr;
@@ -157,13 +168,11 @@ void yield_task_wrr (struct rq *rq)
 
 bool yield_to_task_wrr (struct rq *rq, struct task_struct *p, bool preempt)
 {
-	//printk("DEBUG: %d: yield_to_task\n", p->pid);
 	return false;
 }
 
 void check_preempt_curr_wrr (struct rq *rq, struct task_struct *p, int flags)
 {
-	//printk("DEBUG: %d: check_preempt_curr\n", p->pid);
 }
 
 struct task_struct *pick_next_task_wrr (struct rq *rq)
@@ -178,8 +187,6 @@ struct task_struct *pick_next_task_wrr (struct rq *rq)
 		return NULL;
 	p = wrr_task_of(wrr_se);
 
-	//printk("DEBUG: pick_next_task %d\n", p->pid);
-
 	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
 
 	return p;
@@ -187,71 +194,66 @@ struct task_struct *pick_next_task_wrr (struct rq *rq)
 
 void put_prev_task_wrr (struct rq *rq, struct task_struct *p)
 {
-	//printk("DEBUG: %d: put_prev_task\n", p->pid);
 }
 
 #ifdef CONFIG_SMP
 int  select_task_rq_wrr (struct task_struct *p, int sd_flag, int flags)
 {
-	//printk("DEBUG: %d: select_task_rq\n", p->pid);
 	int i;
 	int min_weight_sum = 1000000000;
 	int min_cpu = -1;
+
+	/* find minimum weight_sum cpu */
+	rcu_read_lock();
 	for_each_possible_cpu(i){
 		struct rq *rq = cpu_rq(i);
 		struct wrr_rq *wrr_rq = &rq->wrr;
-		if(min_weight_sum > wrr_rq->weight_sum){
+		if (!cpumask_test_cpu(i, tsk_cpus_allowed(p)))
+			continue;
+		if (min_weight_sum > wrr_rq->weight_sum){
 			min_cpu = i;
 			min_weight_sum = wrr_rq->weight_sum;
 		}
 	}
+	rcu_read_unlock();
 	return min_cpu;
 }
 
 void migrate_task_rq_wrr (struct task_struct *p, int next_cpu)
 {
-	//printk("DEBUG: %d: migrate_task_rq\n", p->pid);
 }
 
 void pre_schedule_wrr (struct rq *this_rq, struct task_struct *task)
 {
-	//printk("DEBUG: pre_schedule\n");
 }
 
 void post_schedule_wrr (struct rq *this_rq)
 {
-	//printk("DEBUG: post_schedule\n");
 }
 
 void task_waking_wrr (struct task_struct *task)
 {
-	//printk("DEBUG: task_waking\n");
 }
 
 void task_woken_wrr (struct rq *this_rq, struct task_struct *task)
 {
-	//printk("DEBUG: task_woken\n");
 }
 
 void set_cpus_allowed_wrr (struct task_struct *p, const struct cpumask *newmask)
 {
-	//printk("DEBUG: %d: set_cpus_allowed\n", p->pid);
 }
 
 void rq_online_wrr (struct rq *rq)
 {
-	//printk("DEBUG: rq_online\n");
 }
 
 void rq_offline_wrr (struct rq *rq)
 {
-	//printk("DEBUG: rq_offline\n");
 }
 #endif
 
 void set_curr_task_wrr (struct rq *rq)
 {
-	//printk("DEBUG: set_curr_task_wrr\n");
 }
 
 void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
@@ -277,73 +279,67 @@ void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
 
 void task_fork_wrr (struct task_struct *p)
 {
-	//printk("DEBUG: p->pid = %d, current->pid = %d: task_fork on_rq = %d\n", p->pid, current->pid, p->on_rq);
 	p->wrr.on_wrr_rq = 0;
 }
 
 void switched_from_wrr (struct rq *this_rq, struct task_struct *task)
 {
-	//printk("DEBUG: %d: twitched_from\n", task->pid);
 }
 
 void switched_to_wrr (struct rq *this_rq, struct task_struct *task)
 {
-	//printk("DEBUG: %d: switched_to\n", task->pid);
 }
 
 void prio_changed_wrr (struct rq *this_rq, struct task_struct *task, int oldprio)
 {
-	//printk("DEBUG: %d: prio_changed\n", task->pid);
 }
 
 unsigned int get_rr_interval_wrr (struct rq *rq, struct task_struct *task)
 {
-	//printk("DEBUG: %d: get_rr_interval\n", task->pid);
 	return 0;
 }
 
 /* no runqueues are locked when call load_balance */
 static int load_balance(struct rq *this_rq)
 {
-	printk("DEBUG: rq %d, load_balance called\n", this_rq->cpu);
 	int i;
 	int max_cpu = -1;
 	int min_cpu = -1;
 	int max_weight = -1;
 	int min_weight = 1000000000;
 	unsigned long flags;
-
-	for_each_possible_cpu(i){
-		struct rq *rq = cpu_rq(i);
-		struct wrr_rq *wrr_rq = &rq->wrr;
-		if(max_weight < wrr_rq->weight_sum){
-			max_cpu = i;
-			max_weight = wrr_rq->weight_sum;
-		}
-		if(min_weight > wrr_rq->weight_sum){
-			min_cpu = i;
-			min_weight = wrr_rq->weight_sum;
-		}
-	}
-
-	printk("DEBUG: max_cpu %d, max_weight %d, min_cpu %d, min_weight %d\n",
-			max_cpu, max_weight, min_cpu, min_weight);
-
-	if(max_weight == 0 || max_cpu == min_cpu){
-		printk("DEBUG: load_balancing not needed\n");
-		return -1;
-	}
-	
-	struct wrr_rq *max_wrr_rq = &cpu_rq(max_cpu)->wrr;
-	struct wrr_rq *min_wrr_rq = &cpu_rq(min_cpu)->wrr;
+	struct wrr_rq *max_wrr_rq;
+	struct wrr_rq *min_wrr_rq;
 	struct sched_wrr_entity *pos;
-	struct sched_wrr_entity *to_move = NULL;
-	int movable_weight = (max_weight - min_weight - 1) / 2;
+	struct sched_wrr_entity *to_move;
+	int movable_weight;
 	int move_weight = -1;
 
+	rcu_read_lock();
+	for_each_possible_cpu(i){
+		struct rq *rq = cpu_rq(i);
+		int weight_sum = rq->wrr.weight_sum;
+		if(max_weight < weight_sum){
+			max_cpu = i;
+			max_weight = weight_sum;
+		}
+		if(min_weight > weight_sum){
+			min_cpu = i;
+			min_weight = weight_sum;
+		}
+	}
+	rcu_read_unlock();
+
+	if(max_weight == 0 || max_cpu == min_cpu){
+		return 0;
+	}
+	
+	movable_weight = (max_weight - min_weight - 1) / 2;
+	max_wrr_rq = &cpu_rq(max_cpu)->wrr;
+	min_wrr_rq = &cpu_rq(max_cpu)->wrr;
+
 	if(max_wrr_rq->wrr_nr_running < 2){
-		printk("DEBUG: 0 or 1 entries in max_wrr_rq\n");
-		return -1;
+		return 0;
 	}
 
 	/* hold lock for both max and min cpus at the same time
@@ -351,25 +347,24 @@ static int load_balance(struct rq *this_rq)
 	local_irq_save(flags);
 	double_rq_lock(cpu_rq(max_cpu), cpu_rq(min_cpu));
 
-	printk("DEBUG: load_balance successfully lock max:%d min:%d queue\n", max_cpu, min_cpu);
-	list_for_each_entry(pos, &max_wrr_rq->queue_head, queue_node){
-		if(pos->weight <= movable_weight && pos->weight > move_weight && wrr_task_of(pos) != max_wrr_rq->rq->curr && cpumask_test_cpu(min_cpu, tsk_cpus_allowed(wrr_task_of(pos)))) {
+	to_move = NULL;
+
+	for_each_sched_wrr_entity(pos, max_wrr_rq) {
+		int weight = pos->weight;
+		if (!can_move_task_wrr(max_wrr_rq->rq, min_wrr_rq->rq, wrr_task_of(pos)))
+			continue;
+		if(weight <= movable_weight && weight > move_weight) {
 			to_move = pos;
-			move_weight = pos->weight;
+			move_weight = weight;
 		}
 	}
 
 	if (to_move) {
-		deactivate_task(max_wrr_rq->rq, wrr_task_of(to_move), 0);
-		set_task_cpu(wrr_task_of(to_move), min_cpu);
-		activate_task(min_wrr_rq->rq, wrr_task_of(to_move), 0);
-		printk("DEBUG: load_balance successfully move task %d from:%d to:%d queue\n", wrr_task_of(to_move)->pid, max_cpu, min_cpu);
-
+		move_task_wrr(max_wrr_rq->rq, min_wrr_rq->rq, wrr_task_of(to_move));
 	}
 
 	/* release lock for cpu max_cpu, min_cpu */
 	double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
-	printk("DEBUG: load_balance successfully unlock max:%d min:%d queue\n", max_cpu, min_cpu);
 	local_irq_restore(flags);
 
 	return 0;
