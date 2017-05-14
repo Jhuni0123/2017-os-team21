@@ -8211,7 +8211,7 @@ SYSCALL_DEFINE2(sched_setweight, pid_t, pid, int, weight)
 	return do_sched_setweight(pid, weight);
 }
 
-SYSCALL_DEFINE1(sched_getweight, pid_t, pid);
+SYSCALL_DEFINE1(sched_getweight, pid_t, pid)
 {
 	return do_sched_getweight(pid);
 }
