@@ -80,7 +80,7 @@ Timer code calls `scheduler_tick` with HZ frequency. This functions calls `trigg
 By making `scheduler_tick`, not `task_tick_wrr` to call `trigger_load_balance_wrr`, load balancing can be done regardless of first cpu currently running or not. Only one cpu is dedicated to do load balancing since load_balancing should be called only one in 2 seconds, and it is not guaranteed that all cpus share same time measures.
 
 
-## How to set wrr as basic scheme
+## How to set wrr as default scheme
 in inclue/linux/init_task.h
 ```
 #define INIT_TASK(tsk)
