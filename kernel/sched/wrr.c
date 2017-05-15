@@ -12,7 +12,6 @@ static int load_balance(struct rq *this_rq);
 void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 {
 	wrr_rq->wrr_nr_running = 0;
-	wrr_rq->curr = NULL;
 	INIT_LIST_HEAD(&wrr_rq->queue_head);
 	wrr_rq->rq = rq;
 	wrr_rq->next_balancing = 0;
