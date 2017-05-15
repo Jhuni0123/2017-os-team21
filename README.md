@@ -56,4 +56,17 @@ in inclue/linux/init_task.h
 ...
 }
 ```
+- set policy as SCHED_WRR and initiate sched_wrr_entity wrr of task_struct
+in kernel/kthread.c
+```
+struct task_struct *kthread_create_on_node( ... )
+{
+  ...
+  scehd_setscheduler_noched(create.result, SCHED_WRR, &param);
+  ...
+}
+```
+- substitute SCHED_NORMAL with SCHED_WRR
+in kernel/sched/core.c
 
+## Plot 
