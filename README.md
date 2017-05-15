@@ -39,14 +39,30 @@ struct wrr_rq {
 - `u64 next_balancing`:
 
 ## Functionality of sched_class interface functions
-1. enqueue_task_wrr()
-1. dequeue_task_wrr()
-1. load_balance()
+1. `enqueue_task_wrr`
+
+Add `wrr_se` node of given `task_struct` to the end of `wrr_rq`. Update `wrr_nr_running` and `weight_sum` of `wrr_rq`, and `on_wrr_rq` of `wrr_se`.
+
+1. `dequeue_task_wrr`
+
+Delete `wrr_se` node of given `task_struct` from `wrr_rq`. Update `wrr_nr_running` and `weight_sum` of `wrr_rq`, and `on_wrr_rq` of `wrr_se`.
+
+1. `yield_task_wrr`
+
+Delete `wrr_se` node of given `task_struct` from `wrr_rq` and put it to the end of `wrr_rq` again. No need to update parameters.
+
+1. `pick_next_task_wrr`
+
+
+
+1. `load_balance`
 
 ## How sched_class interface functions are used to implement task managing functionalities
 1. task is made with `fork()` and 
 1. load balancing
+
 Timer code calls scheduler_tick with HZ frequency. This functions calls trigger_load_balance_wrr(rq, cpu), and trigger_load_balance 
+
 ## How to set wrr as basic scheme
 in inclue/linux/init_task.h
 ```
