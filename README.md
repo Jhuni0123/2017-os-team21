@@ -39,39 +39,33 @@ struct wrr_rq {
 - `u64 next_balancing`:
 
 ## Functionality of implemented sched_class interface functions
-1. `void enqueue_task_wrr()`
 
-Add `wrr_se` node of given `task_struct` to the end of `wrr_rq`. Update `wrr_nr_running` and `weight_sum` of `wrr_rq`, and `on_wrr_rq` of `wrr_se`.
+These functions are called by functions in core.c. It is guaranteed that these functions are called with `rq.lock` locked.
 
-1. `void dequeue_task_wrr()`
+1. `void enqueue_task_wrr()` : Add `wrr_se` node of given `task_struct` to the end of `wrr_rq`. Update `wrr_nr_running` and `weight_sum` of `wrr_rq`, and `on_wrr_rq` of `wrr_se`.
 
-Delete `wrr_se` node of given `task_struct` from `wrr_rq`. Update `wrr_nr_running` and `weight_sum` of `wrr_rq`, and `on_wrr_rq` of `wrr_se`.
+1. `void dequeue_task_wrr()` : Delete `wrr_se` node of given `task_struct` from `wrr_rq`. Update `wrr_nr_running` and `weight_sum` of `wrr_rq`, and `on_wrr_rq` of `wrr_se`.
 
-1. `void yield_task_wrr()`
+1. `void yield_task_wrr()` : Delete `wrr_se` node of given `task_struct` from `wrr_rq` and put it to the end of `wrr_rq` again. No need to update parameters.
 
-Delete `wrr_se` node of given `task_struct` from `wrr_rq` and put it to the end of `wrr_rq` again. No need to update parameters.
+1. `struct task_struct *pick_next_task_wrr()` : Return the next task to be run. Basically pick the first entry of `wrr_rq`. If it is already running, since there can be only one running process in `wrr_rq`, it is safe to pick the next one. Update `time_slice` of `wrr_se` of that selected task to represent its weight correctly.
 
-1. `struct task_struct *pick_next_task_wrr()`
+1. `int select_task_rq_wrr()` : Only definced under multi process condition. Find cpu with minimum weight_sum and return its number so that new task can be added to that cpu, under load balancing purpose.
 
-Return the next task to be run. Basically pick the first entry of `wrr_rq`. If it is already running, since there can be only one running process in `wrr_rq`, it is safe to pick the next one. Update `time_slice` of `wrr_se` of that selected task to represent its weight correctly.
+1. `void task_tick_wrr()` : Timer code calls task_tick with HZ frequency if a task of this class is currently running on the cpu. Update schedstat and `time_slice` of `wrr_se` to reflect time the task has been runnnig. If running time has expired for the task, reset time_slice, requeue it on `wrr_rq`, and call `set_tsk_need_resched` to reschedule it.
 
-1. `int select_task_rq_wrr()`
+1. `void task_fork_wrr()` : Called for the child process newly created by fork. Reset `on_wrr_rq` to reflect the fact that child process is yet to be scheduled.
 
-Only definced under multi process condition. Find cpu with minimum weight_sum and return its number so that new task can be added to that cpu, under load balancing purpose.
+## Usage of locks in `load_balance` implementation
 
-1. `void task_tick_wrr()`
-
-Timer code calls task_tick with HZ frequency if the cpu is currently 
-
-
+- Used `rcu_read_lock()` and to safely acces `weight_sum` values of all usable cpus. `weight_sum` values are read to find out which cpu has maximum `weight_sum` and which has minimum one. Unlock with `rcu_read_unlock()` right after traversal.
+- Hold doble lock for rq's of both `max_cpu` and `min_cpu` before entering critical section of traversing all `wrr_se` entries of `max_cpu`'s `wrr_rq` and moving appropriate task from `max_cpu` to `min_cpu`. Need to call save irq flags before holding double lock. Right after critical section, release double lock and restore irq flags.
 
 
 ## How sched_class interface functions are used to implement task managing functionalities
 1. task is made with `fork()` and need to be put to `wrr_rq`
 
-1. load balancing
-
-Timer code calls scheduler_tick with HZ frequency. This functions calls trigger_load_balance_wrr(rq, cpu), and trigger_load_balance 
+1. load balancing : Timer code calls scheduler_tick with HZ frequency. This functions calls trigger_load_balance_wrr(rq, cpu), and trigger_load_balance 
 
 ## How to set wrr as basic scheme
 in inclue/linux/init_task.h
