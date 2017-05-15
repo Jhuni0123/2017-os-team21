@@ -119,3 +119,4 @@ in rt.c
 Add call to `print_wrr_stats` in `print_cpu` function. `print_wrr_stats` implemented in wrr.c. It calls `print_wrr_rq` implemented in debug.c, which prints out cpu number, `wrr_nr_running`, and `weight_sum` for given `wrr_rq`.
 
 ## Plot 
+refer to [plot.pdf](https://github.com/swsnu/os-team21/blob/proj3/plot.pdf) for explanation and results.
