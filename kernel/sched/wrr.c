@@ -37,25 +37,9 @@ static inline void __requeue_wrr_entity(struct sched_wrr_entity *curr, struct wr
 	list_move_tail(&curr->queue_node, &wrr_rq->queue_head);
 }
 
-static struct sched_wrr_entity *__pick_next_entity(struct wrr_rq *wrr_rq){
-	
-	struct sched_wrr_entity *next;
-
-	next = list_first_entry_or_null(&wrr_rq->queue_head, struct sched_wrr_entity, queue_node);
-	
-	if(!next)
-		return NULL;
-
-	/* if there is only one entry in the queue,
-	 * just return it regardless of it running right now */
-	if(wrr_rq->wrr_nr_running == 1)
-		return next;
-
-	/* if it's already running, choose the next one */
-	if(wrr_task_of(next) == wrr_rq->rq->curr)
-		next = list_entry(wrr_rq->queue_head.next->next, struct sched_wrr_entity, queue_node);
-
-	return next;
+static inline struct sched_wrr_entity *__pick_next_entity(struct wrr_rq *wrr_rq)
+{
+	return list_first_entry_or_null(&wrr_rq->queue_head, struct sched_wrr_entity, queue_node);
 }
 
 static void update_curr_wrr(struct rq *rq)
@@ -104,14 +88,14 @@ void trigger_load_balance_wrr(struct rq *rq, int cpu)
 		check_load_balance_wrr(&rq->wrr);
 }
 
-void move_task_wrr(struct rq *src_rq, struct rq *dst_rq, struct task_struct *p)
+void inline move_task_wrr(struct rq *src_rq, struct rq *dst_rq, struct task_struct *p)
 {
 	deactivate_task(src_rq, p, 0);
 	set_task_cpu(p, cpu_of(dst_rq));
 	activate_task(dst_rq, p, 0);
 }
 
-bool can_move_task_wrr(struct rq *src_rq, struct rq *dst_rq, struct task_struct *p)
+bool inline can_move_task_wrr(struct rq *src_rq, struct rq *dst_rq, struct task_struct *p)
 {
 	return p != src_rq->curr && cpumask_test_cpu(cpu_of(dst_rq), tsk_cpus_allowed(p));
 }
