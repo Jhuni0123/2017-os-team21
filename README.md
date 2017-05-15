@@ -46,7 +46,7 @@ These functions are called by functions in core.c. It is guaranteed that these f
 
 1. `void yield_task_wrr()` : Delete `wrr_se` node of given `task_struct` from `wrr_rq` and put it to the end of `wrr_rq` again. No need to update parameters.
 
-1. `struct task_struct *pick_next_task_wrr()` : Return the next task to be run. Basically pick the first entry of `wrr_rq` following FIFO rule of wrr. If it is already running, since there can be only one running process in `wrr_rq`, it is safe to pick the next one. Update `time_slice` of `wrr_se` of that selected task to represent its weight correctly. This function does not remove `wrr_se` from `wrr_rq` but just give pointer to the task. Thus, currently running process always locates in the first node of `wrr_rq`.
+1. `struct task_struct *pick_next_task_wrr()` : Return the next task to be run. It is called only after afore running task has been dequeued or requeued, so it is safe to pick the first entry of `wrr_rq` following FIFO rule of wrr. Update `time_slice` of `wrr_se` of that selected task to represent its weight correctly. This function does not remove `wrr_se` from `wrr_rq` but just give pointer to the task. Thus, currently running process always locates in the first node of `wrr_rq`.
 
 1. `int select_task_rq_wrr()` : Only definced under multi process condition. Find cpu with minimum weight_sum and return its number so that new task can be added to that cpu, under load balancing purpose.
 
