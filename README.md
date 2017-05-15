@@ -38,27 +38,37 @@ struct wrr_rq {
 - `int weight_sum`: sum of weights of all tasks on runqueue
 - `u64 next_balancing`:
 
-## Functionality of sched_class interface functions
-1. `enqueue_task_wrr`
+## Functionality of implemented sched_class interface functions
+1. `void enqueue_task_wrr()`
 
 Add `wrr_se` node of given `task_struct` to the end of `wrr_rq`. Update `wrr_nr_running` and `weight_sum` of `wrr_rq`, and `on_wrr_rq` of `wrr_se`.
 
-1. `dequeue_task_wrr`
+1. `void dequeue_task_wrr()`
 
 Delete `wrr_se` node of given `task_struct` from `wrr_rq`. Update `wrr_nr_running` and `weight_sum` of `wrr_rq`, and `on_wrr_rq` of `wrr_se`.
 
-1. `yield_task_wrr`
+1. `void yield_task_wrr()`
 
 Delete `wrr_se` node of given `task_struct` from `wrr_rq` and put it to the end of `wrr_rq` again. No need to update parameters.
 
-1. `pick_next_task_wrr`
+1. `struct task_struct *pick_next_task_wrr()`
+
+Return the next task to be run. Basically pick the first entry of `wrr_rq`. If it is already running, since there can be only one running process in `wrr_rq`, it is safe to pick the next one. Update `time_slice` of `wrr_se` of that selected task to represent its weight correctly.
+
+1. `int select_task_rq_wrr()`
+
+Only definced under multi process condition. Find cpu with minimum weight_sum and return its number so that new task can be added to that cpu, under load balancing purpose.
+
+1. `void task_tick_wrr()`
+
+Timer code calls task_tick with HZ frequency if the cpu is currently 
 
 
 
-1. `load_balance`
 
 ## How sched_class interface functions are used to implement task managing functionalities
-1. task is made with `fork()` and 
+1. task is made with `fork()` and need to be put to `wrr_rq`
+
 1. load balancing
 
 Timer code calls scheduler_tick with HZ frequency. This functions calls trigger_load_balance_wrr(rq, cpu), and trigger_load_balance 
