@@ -17,7 +17,7 @@ struct sched_wrr_entity
   unsigned int time_slice;
 };
 ```
-- `time_slice`:
+- `unsigned int time_slice`: track how long the task has been run for preemtion purpose. managed by task_tick. 
 
 ## struct wrr_rq
 Dummy header for wrr runqueue. Included in rq.
@@ -38,6 +38,7 @@ struct wrr_rq {
 
 ## functionality of sched_class interface functions
 1. enqueue_task_wrr
+1. dequeue_task_wrr
 
 
 ## how to set wrr as basic scheme
@@ -57,6 +58,7 @@ in inclue/linux/init_task.h
 }
 ```
 - set policy as SCHED_WRR and initiate sched_wrr_entity wrr of task_struct
+
 in kernel/kthread.c
 ```
 struct task_struct *kthread_create_on_node( ... )
@@ -67,6 +69,9 @@ struct task_struct *kthread_create_on_node( ... )
 }
 ```
 - substitute SCHED_NORMAL with SCHED_WRR
+
 in kernel/sched/core.c
+- substitute fair with wrr in `sched_fork`, `__sched_setscheduler`, `sched_init`
+
 
 ## Plot 
