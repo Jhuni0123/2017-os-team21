@@ -8182,7 +8182,10 @@ struct task_struct* find_wrr_task_by_vpid(pid_t pid)
 int do_sched_setweight(pid_t pid, int weight)
 {
 	struct task_struct *task;
+	struct rq *rq;
+	int delta;
 	bool root;
+	unsigned long flag;
 
 	if(weight <= 0 || weight > 20)
 		return -EINVAL;
@@ -8198,7 +8201,17 @@ int do_sched_setweight(pid_t pid, int weight)
 	if(!root && (task->wrr.weight < weight))
 		return -EPERM;
 
-	task->wrr.weight = weight;
+
+	task_rq_lock(task, &flag);
+
+	rq = task_rq(task);
+	delta = weight - task->wrr.weight;
+
+	task->wrr.weight += delta;
+	rq->wrr.weight_sum += delta;
+
+	task_rq_unlock(rq, task, &flag);
+
 	return 0;
 }
 
