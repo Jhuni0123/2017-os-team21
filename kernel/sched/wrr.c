@@ -7,7 +7,7 @@
 	list_for_each_entry(pos, &(wrr_rq)->queue_head, queue_node)
 
 const struct sched_class wrr_sched_class;
-static int load_balance(struct rq *this_rq);
+static int load_balance(void);
 
 void init_wrr_rq(struct wrr_rq *wrr_rq, struct rq *rq)
 {
@@ -74,7 +74,7 @@ static void check_load_balance_wrr(struct wrr_rq *wrr_rq)
 
 	if(now > wrr_rq->next_balancing) {
 		printk("DEBUG: now : %lld, next_balancing : %lld\n", now, wrr_rq->next_balancing);
-		load_balance(wrr_rq->rq);
+		load_balance();
 		/* unit of now, next_balancing is nsec */
 		wrr_rq->next_balancing = now + WRR_BALANCE_PERIOD * 1000000000LL;
 	}
@@ -283,20 +283,16 @@ unsigned int get_rr_interval_wrr (struct rq *rq, struct task_struct *task)
 }
 
 /* no runqueues are locked when call load_balance */
-static int load_balance(struct rq *this_rq)
+static int load_balance(void)
 {
 	int i;
-	int max_cpu = -1;
-	int min_cpu = -1;
-	int max_weight = -1;
-	int min_weight = 1000000000;
+	int max_cpu = 0, min_cpu = 0;
+	int max_weight = -1, min_weight = 1000000000;
 	unsigned long flags;
-	struct wrr_rq *max_wrr_rq;
-	struct wrr_rq *min_wrr_rq;
-	struct sched_wrr_entity *pos;
-	struct sched_wrr_entity *to_move;
-	int movable_weight;
-	int move_weight = -1;
+	struct rq *max_rq, *min_rq;
+	struct sched_wrr_entity *pos, *to_move;
+	int movable_weight, move_weight = 0;
+	int moved = 0;
 
 	rcu_read_lock();
 	for_each_possible_cpu(i){
@@ -318,10 +314,10 @@ static int load_balance(struct rq *this_rq)
 	}
 	
 	movable_weight = (max_weight - min_weight - 1) / 2;
-	max_wrr_rq = &cpu_rq(max_cpu)->wrr;
-	min_wrr_rq = &cpu_rq(max_cpu)->wrr;
+	max_rq = cpu_rq(max_cpu);
+	min_rq = cpu_rq(max_cpu);
 
-	if(max_wrr_rq->wrr_nr_running < 2){
+	if(max_rq->wrr.wrr_nr_running < 2){
 		return 0;
 	}
 
@@ -332,9 +328,9 @@ static int load_balance(struct rq *this_rq)
 
 	to_move = NULL;
 
-	for_each_sched_wrr_entity(pos, max_wrr_rq) {
+	for_each_sched_wrr_entity(pos, &max_rq->wrr) {
 		int weight = pos->weight;
-		if (!can_move_task_wrr(max_wrr_rq->rq, min_wrr_rq->rq, wrr_task_of(pos)))
+		if (!can_move_task_wrr(max_rq, min_rq, wrr_task_of(pos)))
 			continue;
 		if(weight <= movable_weight && weight > move_weight) {
 			to_move = pos;
@@ -343,14 +339,15 @@ static int load_balance(struct rq *this_rq)
 	}
 
 	if (to_move) {
-		move_task_wrr(max_wrr_rq->rq, min_wrr_rq->rq, wrr_task_of(to_move));
+		move_task_wrr(max_rq, min_rq, wrr_task_of(to_move));
+		moved++;
 	}
 
 	/* release lock for cpu max_cpu, min_cpu */
-	double_rq_unlock(cpu_rq(max_cpu), cpu_rq(min_cpu));
+	double_rq_unlock(max_rq, min_rq);
 	local_irq_restore(flags);
 
-	return 0;
+	return moved;
 }
 
 /*
