@@ -6,6 +6,8 @@
 | set_weight | 380 |
 | get_weight | 381 |
 
+`set_weight` syscall and `get_weight` syscall are handled by `do_sched_setweight` and `do_sched_getweight` functions in core.c, respectively. `SYSCALL_DEFINE`s also in core.c.
+
 ## struct sched_wrr_entity
 Node of wrr runqueue. Included in task_struct.
 ```
@@ -36,12 +38,16 @@ struct wrr_rq {
 - `int weight_sum`: sum of weights of all tasks on runqueue
 - `u64 next_balancing`:
 
-## functionality of sched_class interface functions
-1. enqueue_task_wrr
-1. dequeue_task_wrr
+## Functionality of sched_class interface functions
+1. enqueue_task_wrr()
+1. dequeue_task_wrr()
+1. load_balance()
 
-
-## how to set wrr as basic scheme
+## How sched_class interface functions are used to implement task managing functionalities
+1. task is made with `fork()` and 
+1. load balancing
+Timer code calls scheduler_tick with HZ frequency. This functions calls trigger_load_balance_wrr(rq, cpu), and trigger_load_balance 
+## How to set wrr as basic scheme
 in inclue/linux/init_task.h
 ```
 #define INIT_TASK(tsk)
@@ -73,5 +79,10 @@ struct task_struct *kthread_create_on_node( ... )
 in kernel/sched/core.c
 - substitute fair with wrr in `sched_fork`, `__sched_setscheduler`, `sched_init`
 
+in rt.c
+- substitue `&fair_sched_class` with `&wrr_sched_class` in `const struct sched_class rt_sched_class`
+
+## debug.c
+Add call to `print_wrr_stats` in `print_cpu` function. `print_wrr_stats` implemented in wrr.c. It calls `print_wrr_rq` implemented in debug.c, which prints out cpu number, `wrr_nr_running`, and `weight_sum` for given `wrr_rq`.
 
 ## Plot 
