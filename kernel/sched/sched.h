@@ -364,7 +364,6 @@ struct rt_rq {
 /* wrr related fields in a runqueue */
 struct wrr_rq {
 	unsigned int wrr_nr_running;
-	struct sched_wrr_entity *curr;
 	struct list_head queue_head;
 	struct rq *rq;
 	int weight_sum;
