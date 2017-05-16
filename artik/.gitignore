@@ -1,3 +1,5 @@
 multiproc
 plot
+ageplot
+infloop
 *.o
