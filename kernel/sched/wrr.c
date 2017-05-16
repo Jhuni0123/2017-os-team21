@@ -63,6 +63,23 @@ static void update_curr_wrr(struct rq *rq)
 	cpuacct_charge(curr, delta_exec);
 }
 
+#ifdef CONFIG_WRR_AGING
+static void check_aging(struct wrr_rq *wrr_rq, struct sched_wrr_entity *wrr_se)
+{
+	int aging;
+
+	if(wrr_se->weight > 19)
+		return;
+	
+	aging = ++(wrr_se->aging_time_slice);
+	if(aging > 199){
+		wrr_se->weight++;
+		wrr_rq->weight_sum++;
+		wrr_se->aging_time_slice = 0;
+	}
+}
+#endif
+
 static void check_load_balance_wrr(struct wrr_rq *wrr_rq)
 {
 	u64 now = wrr_rq->rq->clock_task;
@@ -245,7 +262,11 @@ void task_tick_wrr (struct rq *rq, struct task_struct *p, int queued)
 	struct wrr_rq *wrr_rq = &rq->wrr;
 
 	update_curr_wrr(rq);
-	
+
+#ifdef CONFIG_WRR_AGING
+	check_aging(wrr_rq, wrr_se);
+#endif
+
 	if(p->policy != SCHED_WRR)
 		return;
 	
