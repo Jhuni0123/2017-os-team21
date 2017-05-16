@@ -1059,6 +1059,9 @@ struct sched_wrr_entity {
 	int on_wrr_rq;
 	struct list_head queue_node;
 	unsigned int time_slice;
+#ifdef CONFIG_WRR_AGING
+	int aging_time_slice;
+#endif
 };
 
 struct rcu_node;
