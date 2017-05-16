@@ -24,8 +24,10 @@ static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
 
 static inline void __enqueue_wrr_entity(struct wrr_rq *wrr_rq, struct sched_wrr_entity *wrr_se)
 {
+#ifdef CONFIG_WRR_AGING
 	wrr_se->aging_weight = 0;
 	wrr_se->aging_timeslice = 0;
+#endif
 	list_add_tail(&wrr_se->queue_node, &wrr_rq->queue_head);
 }
 
@@ -349,7 +351,7 @@ static int load_balance(void)
 	
 	movable_weight = (max_weight - min_weight - 1) / 2;
 	max_rq = cpu_rq(max_cpu);
-	min_rq = cpu_rq(max_cpu);
+	min_rq = cpu_rq(min_cpu);
 
 	if(max_rq->wrr.wrr_nr_running < 2){
 		return 0;
