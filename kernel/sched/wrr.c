@@ -3,8 +3,6 @@
 #include <linux/list.h>
 #include <linux/sched/wrr.h>
 
-#define CONFIG_WRR_AGING
-
 #define for_each_sched_wrr_entity(pos, wrr_rq)	\
 	list_for_each_entry(pos, &(wrr_rq)->queue_head, queue_node)
 
