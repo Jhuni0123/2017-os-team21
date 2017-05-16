@@ -8,5 +8,9 @@ multiproc: multiproc.c
 plot: plot.c
 	$(CC) -o plot plot.c
 
+aging: ageplot.c infloop.c
+	$(CC) -o ageplot ageplot.c
+	$(CC) -o infloop infloop.c
+
 clean:
 	rm -f multiproc plot
