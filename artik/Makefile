@@ -1,6 +1,6 @@
 CC = arm-linux-gnueabi-gcc
 
-all: multiproc plot
+all: multiproc plot aging
 
 multiproc: multiproc.c
 	$(CC) -o multiproc multiproc.c
@@ -13,4 +13,4 @@ aging: ageplot.c infloop.c
 	$(CC) -o infloop infloop.c
 
 clean:
-	rm -f multiproc plot
+	rm -f multiproc plot ageplot infloop
