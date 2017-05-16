@@ -6,10 +6,10 @@
 | set_weight | 380 |
 | get_weight | 381 |
 
-(SPECIFICATION MODIFICATION)`set_weight` syscall and `get_weight` syscall are handled by `do_sched_setweight` and `do_sched_getweight` functions in core.c, respectively. `SYSCALL_DEFINE`s also in core.c. Specification document dictated system calls be implemented in kernel/sched.c, but the file does not exist and syscalls whose name starts with sched are defined in kernel/sched/core.c. So this team decided to put new syscalls into core.c. 
+(SPECIFICATION MODIFICATION)`set_weight` syscall and `get_weight` syscall are handled by `do_sched_setweight` and `do_sched_getweight` functions in core.c, respectively. `SYSCALL_DEFINE`s also in core.c. Specification document dictated system calls be implemented in `kernel/sched.c`, but the file does not exist and syscalls whose name starts with sched are defined in kernel/sched/core.c. So this team decided to put new syscalls into core.c. 
 
 ## struct sched_wrr_entity
-Node of wrr runqueue. Included in task_struct.
+Node of wrr runqueue. Included in `task_struct`.
 ```
 struct sched_wrr_entity
 {
@@ -19,10 +19,10 @@ struct sched_wrr_entity
   unsigned int time_slice;
 };
 ```
-- `unsigned int time_slice`: track how long the task has been run for preemtion purpose. managed by task_tick. 
+- `unsigned int time_slice`: track how long the task has been run for preemtion purpose. managed by `task_tick`. 
 
 ## struct wrr_rq
-Dummy header for wrr runqueue. Included in rq.
+Dummy header for wrr runqueue. Included in `rq`.
 ```
 struct wrr_rq {
   unsigned int wrr_nr_running;
@@ -32,13 +32,13 @@ struct wrr_rq {
   u64 next_balancing;
 };
 ```
-- `unsigned int wrr_nr_running`: number of tasks on runqueue
-- `int weight_sum`: sum of weights of all tasks on runqueue
+- `unsigned int wrr_nr_running`: number of tasks on wrr runqueue
+- `int weight_sum`: sum of weights of all tasks on wrr runqueue
 - `u64 next_balancing`: track how much time is left to call `load_balance`.
 
 ## Functionality of implemented sched_class interface functions
 
-These functions are called by functions in core.c. It is guaranteed that these functions are called with `rq.lock` locked.
+These functions are called by functions in `core.c`. It is guaranteed that these functions are called with `rq.lock` locked.
 
 1. `void enqueue_task_wrr()` : Add `wrr_se` node of given `task_struct` to the end of `wrr_rq`. Update `wrr_nr_running` and `weight_sum` of `wrr_rq`, and `on_wrr_rq` of `wrr_se`.
 
@@ -46,7 +46,7 @@ These functions are called by functions in core.c. It is guaranteed that these f
 
 1. `void yield_task_wrr()` : Delete `wrr_se` node of given `task_struct` from `wrr_rq` and put it to the end of `wrr_rq` again. No need to update parameters.
 
-1. `struct task_struct *pick_next_task_wrr()` : Return the next task to be run. It is called only after afore running task has been dequeued or requeued, so it is safe to pick the first entry of `wrr_rq` following FIFO rule of wrr. Update `time_slice` of `wrr_se` of that selected task to represent its weight correctly. This function does not remove `wrr_se` from `wrr_rq` but just give pointer to the task. Thus, currently running process always locates in the first node of `wrr_rq`.
+1. `struct task_struct *pick_next_task_wrr()` : Return the next task to be run. It is called only after afore-running task has been dequeued or requeued, so it is safe to pick the first entry of `wrr_rq` following FIFO rule of wrr. Update `time_slice` of `wrr_se` of that selected task to represent its weight correctly. This function does not remove `wrr_se` from `wrr_rq` but just give pointer to the task. Thus, currently running process always locates in the first node of `wrr_rq`.
 
 1. `int select_task_rq_wrr()` : Only defined under multi process condition. Find cpu with minimum weight_sum and return its number so that new task can be added to that cpu, under load balancing purpose.
 
@@ -96,7 +96,7 @@ in inclue/linux/init_task.h
 ...
 }
 ```
-- set policy as SCHED_WRR and initiate sched_wrr_entity wrr of task_struct
+- set policy as `SCHED_WRR` and initiate `sched_wrr_entity wrr` of `task_struct`
 
 in kernel/kthread.c
 ```
@@ -107,13 +107,14 @@ struct task_struct *kthread_create_on_node( ... )
   ...
 }
 ```
-- substitute SCHED_NORMAL with SCHED_WRR
+- substitute `SCHED_NORMAL` with `SCHED_WRR`
 
 in kernel/sched/core.c
-- substitute fair with wrr in `sched_fork`, `__sched_setscheduler`, `sched_init`
+- substitute fair with wrr in `sched_init`
+- assign `wrr_sched_class` in `sched_fork`, `__sched_setscheduler` when the policy is `SCHED_WRR`.
 
 in rt.c
-- substitue `&fair_sched_class` with `&wrr_sched_class` in `const struct sched_class rt_sched_class`
+- substitue `&fair_sched_class` with `&wrr_sched_class` in `rt_sched_class->next`
 
 ## Improvement
 
@@ -135,4 +136,4 @@ refer to [plot.pdf](https://github.com/swsnu/os-team21/blob/proj3/plot.pdf) for 
 1. [w/o aging](https://goo.gl/kOLCyS)
 1. [w/ aging](https://goo.gl/5PGnfv)
 
-Both are done on this environment: 16 infinite loops with weight 20 have been running. Execute `ageplot.c` that runs a task that do prime factorization for n trials. Performance improved by 8 times.
+Both are done on this environment: 16 infinite loops with weight 20 have been running. Execute `ageplot.c` that runs a task that starts with weight 1 that do prime factorization for n trials. When test with aging, it ages while preparing test, so trials are run with weight 20. Performance improved by 8 times.
