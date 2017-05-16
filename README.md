@@ -121,8 +121,18 @@ This team adopted aging policy to improve performance. Objective is to give long
 
 This policy will be especially helpful whent there comes many short-running tasks while small number of long-running processe are being executed. In that case, long-running processes need to wait for coming short-running tasks to run for their share fully, and will finish late. Aging helps it.
 
+In order to run it, set `#define CONFIG_WRR_AGING` as 1 in `include/linux/sched.h`. it is set as 0 in proj3 branch.
+
+
 ## debug.c
 Add call to `print_wrr_stats` in `print_cpu` function. `print_wrr_stats` implemented in wrr.c. It calls `print_wrr_rq` implemented in debug.c, which prints out cpu number, `wrr_nr_running`, and `weight_sum` for given `wrr_rq`.
 
 ## Plot 
 refer to [plot.pdf](https://github.com/swsnu/os-team21/blob/proj3/plot.pdf) for explanation and results.
+
+## Demo Videos
+
+1. [w/o aging](goo.gl/kOLCyS)
+1. [w/ aging](goo.gl/5PGnfv)
+
+Both are done on this environment: 16 infinite loops with weight 20 have been running. Execute `ageplot.c` that runs a task that do prime factorization for n trials. Performance improved by 8 times.
