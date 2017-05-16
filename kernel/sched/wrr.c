@@ -24,25 +24,11 @@ static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
 
 static inline void __enqueue_wrr_entity(struct wrr_rq *wrr_rq, struct sched_wrr_entity *wrr_se)
 {
-#ifdef CONFIG_WRR_AGING
-	wrr_se->aging_weight = 0;
-	wrr_se->aging_timeslice = 0;
-#endif
 	list_add_tail(&wrr_se->queue_node, &wrr_rq->queue_head);
 }
 
 static inline void __dequeue_wrr_entity(struct sched_wrr_entity *wrr_se)
 {
-#ifdef CONFIG_WRR_AGING
-	if(wrr_se->aging_weight) {
-		int next_weight = wrr_se->weight - wrr_se->aging_weight;
-		if(next_weight <= 0)
-			next_weight = 1;
-		wrr_se->rq->weight_sum -= wrr_se->weight - next_weight;
-		wrr_se->weight = next_weight;
-		wrr_se->aging_weight = 0;
-	}
-#endif
 	list_del(&wrr_se->queue_node);
 }
 
@@ -145,6 +131,10 @@ void enqueue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 	if(wrr_se->on_wrr_rq)
 		return;
 
+#ifdef CONFIG_WRR_AGING
+	wrr_se->aging_weight = 0;
+	wrr_se->aging_time_slice = 0;
+#endif
 	__enqueue_wrr_entity(wrr_rq, wrr_se);
 
 	inc_nr_running(rq);
@@ -161,6 +151,16 @@ void dequeue_task_wrr (struct rq *rq, struct task_struct *p, int flags)
 	if(!(wrr_se->on_wrr_rq))
 		return;
 	
+#ifdef CONFIG_WRR_AGING
+	if(wrr_se->aging_weight) {
+		int next_weight = wrr_se->weight - wrr_se->aging_weight;
+		if(next_weight <= 0)
+			next_weight = 1;
+		wrr_rq->weight_sum -= wrr_se->weight - next_weight;
+		wrr_se->weight = next_weight;
+		wrr_se->aging_weight = 0;
+	}
+#endif
 	__dequeue_wrr_entity(wrr_se);
 
 	dec_nr_running(rq);

@@ -1054,6 +1054,8 @@ struct sched_rt_entity {
 #endif
 };
 
+//#define CONFIG_WRR_AGING
+
 struct sched_wrr_entity {
 	int weight;
 	int on_wrr_rq;
@@ -1061,6 +1063,7 @@ struct sched_wrr_entity {
 	unsigned int time_slice;
 #ifdef CONFIG_WRR_AGING
 	int aging_time_slice;
+	int aging_weight;
 #endif
 };
 
