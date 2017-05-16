@@ -119,6 +119,7 @@ in rt.c
 
 This team adopted aging policy to improve performance. Objective is to give long-running processes bigger weight so that they would not be stalled more but be done earlier. Variables of `aging_time_slice` and `aging_weight` are added to `sched_wrr_entity`. `aging_time_slice` checks times left to increment weight, and `aging_weight` tracks the amount of weight incremented by aging so that later it can be used to reset weight. `aging_time_slice` is incremented every `task_tick` and if it reaches 200, which means the task has been run for 1 second, `weight` and `aging_weight` are incremented. When a task is dequeued from `wrr_rq` its `weight` is resetted, with the memory of `aging_weight`. This policy is to prevent tasks that run intermittently from having high weight.
 
+This policy will be especially helpful whent there comes many short-running tasks while small number of long-running processe are being executed. In that case, long-running processes need to wait for coming short-running tasks to run for their share fully, and will finish late. Aging helps it.
 
 ## debug.c
 Add call to `print_wrr_stats` in `print_cpu` function. `print_wrr_stats` implemented in wrr.c. It calls `print_wrr_rq` implemented in debug.c, which prints out cpu number, `wrr_nr_running`, and `weight_sum` for given `wrr_rq`.
