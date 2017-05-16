@@ -24,11 +24,23 @@ static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
 
 static inline void __enqueue_wrr_entity(struct wrr_rq *wrr_rq, struct sched_wrr_entity *wrr_se)
 {
+	wrr_se->aging_weight = 0;
+	wrr_se->aging_timeslice = 0;
 	list_add_tail(&wrr_se->queue_node, &wrr_rq->queue_head);
 }
 
 static inline void __dequeue_wrr_entity(struct sched_wrr_entity *wrr_se)
 {
+#ifdef CONFIG_WRR_AGING
+	if(wrr_se->aging_weight) {
+		int next_weight = wrr_se->weight - wrr_se->aging_weight;
+		if(next_weight <= 0)
+			next_weight = 1;
+		wrr_se->rq->weight_sum -= wrr_se->weight - next_weight;
+		wrr_se->weight = next_weight;
+		wrr_se->aging_weight = 0;
+	}
+#endif
 	list_del(&wrr_se->queue_node);
 }
 
@@ -72,8 +84,9 @@ static void check_aging(struct wrr_rq *wrr_rq, struct sched_wrr_entity *wrr_se)
 		return;
 	
 	aging = ++(wrr_se->aging_time_slice);
-	if(aging > 199){
+	if(aging > WRR_AGING_TIME){
 		wrr_se->weight++;
+		wrr_se->aging_weight++;
 		wrr_rq->weight_sum++;
 		wrr_se->aging_time_slice = 0;
 	}

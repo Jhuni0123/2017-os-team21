@@ -13,4 +13,7 @@
 /* 2 sec */
 #define WRR_BALANCE_PERIOD 2
 
+/* 1 sec */
+#define WRR_AGING_TIME 200
+
 #endif /* _SCHED_WRR_H */
