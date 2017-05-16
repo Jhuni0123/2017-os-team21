@@ -132,7 +132,7 @@ refer to [plot.pdf](https://github.com/swsnu/os-team21/blob/proj3/plot.pdf) for 
 
 ## Demo Videos
 
-1. [w/o aging](goo.gl/kOLCyS)
-1. [w/ aging](goo.gl/5PGnfv)
+1. [w/o aging](https://goo.gl/kOLCyS)
+1. [w/ aging](https://goo.gl/5PGnfv)
 
 Both are done on this environment: 16 infinite loops with weight 20 have been running. Execute `ageplot.c` that runs a task that do prime factorization for n trials. Performance improved by 8 times.
