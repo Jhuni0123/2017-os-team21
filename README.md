@@ -122,7 +122,7 @@ This team adopted aging policy to improve performance. Objective is to give long
 
 This policy will be especially helpful whent there comes many short-running tasks while small number of long-running processe are being executed. In that case, long-running processes need to wait for coming short-running tasks to run for their share fully, and will finish late. Aging helps it.
 
-In order to run it, set `#define CONFIG_WRR_AGING` as 1 in `include/linux/sched.h`. it is set as 0 in proj3 branch.
+In order to run it, uncomment `#define CONFIG_WRR_AGING` in `include/linux/sched.h`. It is commented in proj3 branch.
 
 
 ## debug.c
