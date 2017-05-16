@@ -315,7 +315,7 @@ static int load_balance(void)
 	
 	movable_weight = (max_weight - min_weight - 1) / 2;
 	max_rq = cpu_rq(max_cpu);
-	min_rq = cpu_rq(max_cpu);
+	min_rq = cpu_rq(min_cpu);
 
 	if(max_rq->wrr.wrr_nr_running < 2){
 		return 0;
