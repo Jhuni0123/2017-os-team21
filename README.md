@@ -6,7 +6,7 @@
 | set_weight | 380 |
 | get_weight | 381 |
 
-`set_weight` syscall and `get_weight` syscall are handled by `do_sched_setweight` and `do_sched_getweight` functions in core.c, respectively. `SYSCALL_DEFINE`s also in core.c.
+(SPECIFICATION MODIFICATION)`set_weight` syscall and `get_weight` syscall are handled by `do_sched_setweight` and `do_sched_getweight` functions in core.c, respectively. `SYSCALL_DEFINE`s also in core.c. Specification document dictated system calls be implemented in kernel/sched.c, but the file does not exist and syscalls whose name starts with sched are defined in kernel/sched/core.c. So this team decided to put new syscalls into core.c. 
 
 ## struct sched_wrr_entity
 Node of wrr runqueue. Included in task_struct.
