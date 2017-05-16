@@ -67,7 +67,7 @@ If `fork()` is executed, `sched_fork` of core.c is called. It refers to `policy`
 
 - task has used up all its allocated `time_slice` but is not done yet.
 
-`task_tick_wrr` checks if currently running task has used up all its allocated time. It it has, `task_tick_wrr` requeues the process and reschedule it.
+`task_tick_wrr` checks if currently running task has used up all its allocated time. If it has, `task_tick_wrr` requeues the process and reschedule it.
 
 - task is done or it sleeps.
 
