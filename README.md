@@ -48,7 +48,7 @@ These functions are called by functions in core.c. It is guaranteed that these f
 
 1. `struct task_struct *pick_next_task_wrr()` : Return the next task to be run. It is called only after afore running task has been dequeued or requeued, so it is safe to pick the first entry of `wrr_rq` following FIFO rule of wrr. Update `time_slice` of `wrr_se` of that selected task to represent its weight correctly. This function does not remove `wrr_se` from `wrr_rq` but just give pointer to the task. Thus, currently running process always locates in the first node of `wrr_rq`.
 
-1. `int select_task_rq_wrr()` : Only definced under multi process condition. Find cpu with minimum weight_sum and return its number so that new task can be added to that cpu, under load balancing purpose.
+1. `int select_task_rq_wrr()` : Only defined under multi process condition. Find cpu with minimum weight_sum and return its number so that new task can be added to that cpu, under load balancing purpose.
 
 1. `void task_tick_wrr()` : Timer code calls task_tick with HZ frequency if a task of this class is currently running on the cpu. Update schedstat and `time_slice` of `wrr_se` to reflect time the task has been runnnig. If running time has expired for the task, reset time_slice, requeue it on `wrr_rq`, and call `set_tsk_need_resched` to reschedule it.
 
@@ -57,7 +57,7 @@ These functions are called by functions in core.c. It is guaranteed that these f
 ## Usage of locks in `load_balance` implementation
 
 - Used `rcu_read_lock()` and to safely acces `weight_sum` values of all usable cpus. `weight_sum` values are read to find out which cpu has maximum `weight_sum` and which has minimum one. Unlock with `rcu_read_unlock()` right after traversal.
-- Hold doble lock for rq's of both `max_cpu` and `min_cpu` before entering critical section of traversing all `wrr_se` entries of `max_cpu`'s `wrr_rq` and moving appropriate task from `max_cpu` to `min_cpu`. Need to call save irq flags before holding double lock. Right after critical section, release double lock and restore irq flags.
+- Hold double lock for rq's of both `max_cpu` and `min_cpu` before entering critical section of traversing all `wrr_se` entries of `max_cpu`'s `wrr_rq` and moving appropriate task from `max_cpu` to `min_cpu`. Need to call save irq flags before holding double lock. Right after critical section, release double lock and restore irq flags.
 
 
 ## How sched_class interface functions are used to implement task managing functionalities
