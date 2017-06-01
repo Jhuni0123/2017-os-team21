@@ -4,6 +4,6 @@ struct gps_location {
 	int lng_integer;
 	int lng_fractional;
 	int accuracy;
-}
+};
 
 extern struct gps_location device_loc;

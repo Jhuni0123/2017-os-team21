@@ -6,10 +6,12 @@
 #include <linux/string.h>
 #include <linux/errno.h>
 
+struct gps_location device_loc;
+
 int do_set_gps_location(struct gps_location __user *loc)
 {
 	struct gps_location kloc;
-	if(copy_from_user(&kloc, loc, sizeof(struct(gps_location))))
+	if(copy_from_user(&kloc, loc, sizeof(struct gps_location)))
 		return -EFAULT;
 	if(kloc.lat_integer < -90 || kloc.lat_integer > 90)
 		return -EINVAL;
@@ -21,7 +23,7 @@ int do_set_gps_location(struct gps_location __user *loc)
 		return -EINVAL;
 	if(kloc.accuracy < 0)
 		return -EINVAL;
-	memcpy(&device_loc, &kloc, sizeof(struct(gps_location)));
+	memcpy(&device_loc, &kloc, sizeof(struct gps_location));
 	return 0;
 }
 
