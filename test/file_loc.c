@@ -13,7 +13,7 @@ int main(int argc, char** argv)
 	}
 	
 	struct gps_location *loc;
-	loc = malloc(struct gps_location);
+	loc = malloc(sizeof(struct gps_location));
 	
 	if(get_gps_location(argv[0], loc)){
 		printf("File not readable or no GPS info found\n");
