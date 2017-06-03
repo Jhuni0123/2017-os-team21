@@ -8,8 +8,7 @@
 
 int main(int argc, char** argv)
 {
-
-	if(argc != 1){
+	if(argc < 2){
 		printf("Invalid input\n");
 		return 1;
 	}
@@ -17,7 +16,7 @@ int main(int argc, char** argv)
 	struct gps_location *loc;
 	loc = malloc(sizeof(struct gps_location));
 	
-	if(syscall(GET_GPS_LOCATION, argv[0], loc)){
+	if(syscall(GET_GPS_LOCATION, argv[1], loc)){
 		printf("File not readable or no GPS info found\n");
 		return 1;
 	}
@@ -28,5 +27,4 @@ int main(int argc, char** argv)
 	
 	free(loc);
 	return 0;
-
 }
