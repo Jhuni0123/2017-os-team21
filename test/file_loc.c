@@ -1,8 +1,10 @@
 #include <unistd.h>
-#include <stdio.c>
-#include <stdlib.c>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/syscall.h>
 #include "gps.h"
+
+#define GET_GPS_LOCATION 381
 
 int main(int argc, char** argv)
 {
@@ -15,7 +17,7 @@ int main(int argc, char** argv)
 	struct gps_location *loc;
 	loc = malloc(sizeof(struct gps_location));
 	
-	if(get_gps_location(argv[0], loc)){
+	if(syscall(GET_GPS_LOCATION, argv[0], loc)){
 		printf("File not readable or no GPS info found\n");
 		return 1;
 	}
