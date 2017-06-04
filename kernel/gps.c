@@ -47,10 +47,16 @@ int do_get_gps_location(const char __user *pathname, struct gps_location __user 
 
 	name = (char *) kmalloc(sizeof(char) * len, GFP_ATOMIC);
 	
-	if(strncpy_from_user(name, pathname, len))
+	if(strncpy_from_user(name, pathname, len)){
+		kfree(name);
 		return -EFAULT;
-	if(kern_path(name, 0, path))
+	}
+	if(kern_path(name, 0, path)){
+		kfree(name);
 		return -EINVAL;
+	}
+
+	kfree(name);
 	inode = path->dentry->d_inode;
 	
 	if(inode->i_op->get_gps_location)
@@ -60,6 +66,7 @@ int do_get_gps_location(const char __user *pathname, struct gps_location __user 
 	
 	if(copy_to_user(loc, kloc, sizeof(struct gps_location)))
 		return -EFAULT;
+
 	return 0;
 }
 
