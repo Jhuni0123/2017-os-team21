@@ -1590,9 +1590,9 @@ int ext2_set_gps_location(struct inode *inode)
 {
 	struct ext2_inode_info *ei = EXT2_I(inode);
 
-	/* TODO: read lock */
+	spin_lock(&gps_lock);
 	ei->i_gps = device_loc;
-	/* TODO: read unlock */
+	spin_unlock(&gps_lock);
 
 	return 0;
 }
