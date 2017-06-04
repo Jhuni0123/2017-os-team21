@@ -38,14 +38,14 @@ int do_set_gps_location(struct gps_location __user *loc)
 
 int do_get_gps_location(const char __user *pathname, struct gps_location __user *loc)
 {
-	if(loc == NULL)
-		return -EINVAL;
-
 	struct gps_location kloc;
-	struct path *path;
+	struct path path;
 	struct inode *inode;
 	char *name;
 	long len;
+
+	if(loc == NULL)
+		return -EINVAL;
 
 	// get file's gps location
 	// check do_sys_open() in fs/open.c for reference
@@ -55,17 +55,20 @@ int do_get_gps_location(const char __user *pathname, struct gps_location __user 
 
 	name = (char *) kmalloc(sizeof(char) * len, GFP_ATOMIC);
 	
-	if(strncpy_from_user(name, pathname, len)){
+	if (name == NULL)
+		return -ENOMEM;
+
+	if(strncpy_from_user(name, pathname, len) < 0){
 		kfree(name);
 		return -EFAULT;
 	}
-	if(kern_path(name, 0, path)){
+	if(kern_path(name, 0, &path)){
 		kfree(name);
 		return -EINVAL;
 	}
 
 	kfree(name);
-	inode = path->dentry->d_inode;
+	inode = path.dentry->d_inode;
 	
 	if(inode->i_op->get_gps_location)
 		inode->i_op->get_gps_location(inode, &kloc);
