@@ -14,4 +14,6 @@ struct gps_location {
 extern struct gps_location device_loc;
 extern spinlock_t gps_lock;
 
+extern bool is_same_location(struct gps_location *loc1, struct gps_location *loc2);
+
 #endif

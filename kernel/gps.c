@@ -6,10 +6,31 @@
 #include <linux/string.h>
 #include <linux/errno.h>
 #include <linux/namei.h>
+#include <linux/math64.h>
 
 struct gps_location device_loc;
 
 DEFINE_SPINLOCK(gps_lock);
+
+bool is_same_location(struct gps_location *loc1, struct gps_location *loc2)
+{
+	long long lat1 = loc1->lat_integer*1000000LL + loc1->lat_fractional;
+	long long lng1 = loc1->lng_integer*1000000LL + loc1->lng_fractional;
+
+	long long lat2 = loc2->lat_integer*1000000LL + loc2->lat_fractional;
+	long long lng2 = loc2->lng_integer*1000000LL + loc2->lng_fractional;
+
+	long long lat = lat1 - lat2;
+	long long lng = min(abs(lng1 - lng2), 180 - abs(lng1 - lng2));
+
+	long long distance_square = lat*lat + lng*lng;
+	unsigned long long accuracy = (loc1->accuracy + loc2->accuracy) * 895247ULL;
+	unsigned long divisor = 100000U;
+	do_div(accuracy, divisor);
+	unsigned long long accuracy_square = accuracy * accuracy;
+
+	return (distance_square <= accuracy_square);
+}
 
 int do_set_gps_location(struct gps_location __user *loc)
 {
