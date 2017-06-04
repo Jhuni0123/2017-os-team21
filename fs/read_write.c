@@ -430,6 +430,7 @@ ssize_t __kernel_write(struct file *file, const char *buf, size_t count, loff_t 
 ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
+	struct inode *inode;
 
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
@@ -446,6 +447,11 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 			ret = file->f_op->write(file, buf, count, pos);
 		else
 			ret = do_sync_write(file, buf, count, pos);
+
+		inode = file->f_path.dentry->d_inode;
+		if (inode->i_op->set_gps_location)
+			inode->i_op->set_gps_location(inode);
+
 		if (ret > 0) {
 			fsnotify_modify(file);
 			add_wchar(current, ret);
