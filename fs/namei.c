@@ -36,6 +36,7 @@
 #include <linux/posix_acl.h>
 #include <linux/hash.h>
 #include <asm/uaccess.h>
+#include <linux/gps.h>
 
 #include "internal.h"
 #include "mount.h"
@@ -319,6 +320,21 @@ int generic_permission(struct inode *inode, int mask)
 	ret = acl_permission_check(inode, mask);
 	if (ret != -EACCES)
 		return ret;
+
+
+	/*
+	 * Do ext2 special gps location permission check.
+	 */
+	if(inode->i_op->get_gps_location){
+		struct gps_location file_loc;
+		struct gps_location user_loc;
+		inode->i_op->get_gps_location(inode, &file_loc);
+		spin_lock(&gps_lock);
+		user_loc = device_loc;
+		spin_unlock(&gps_lock);
+		if(!is_same_location(&file_loc, &user_loc))
+			return -EACCES;
+	}
 
 	if (S_ISDIR(inode->i_mode)) {
 		/* DACs are overridable for directories */
