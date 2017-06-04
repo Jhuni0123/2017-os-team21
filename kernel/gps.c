@@ -5,6 +5,7 @@
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/errno.h>
+#include <linux/namei.h>
 
 struct gps_location device_loc;
 
@@ -32,10 +33,27 @@ int do_get_gps_location(const char __user *pathname, struct gps_location __user 
 	if(loc == NULL)
 		return -EINVAL;
 
+	struct gps_location *kloc;
+	struct path *path;
+	struct inode *inode;
+	char name;
+	long leng;
+
 	// get file's gps location
 	// check do_sys_open() in fs/open.c for reference
 
-	struct gps_location* kloc;
+	if((leng = strnlen_user(pathname, 1000000L)) == 0)
+		return -EINVAL;
+	if(strncpy_from_user(&name, pathname, leng))
+		return -EFAULT;
+	kern_path(&name, 0, path);
+	inode = path->dentry->d_inode;
+	
+	if(inode->i_op->get_gps_location)
+		inode->i_op->get_gps_location(inode, kloc);
+	else 
+		return -ENODEV;
+	
 	if(copy_to_user(loc, kloc, sizeof(struct gps_location)))
 		return -EFAULT;
 	return 0;
