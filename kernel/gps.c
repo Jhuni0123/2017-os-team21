@@ -46,7 +46,8 @@ int do_get_gps_location(const char __user *pathname, struct gps_location __user 
 		return -EINVAL;
 	if(strncpy_from_user(&name, pathname, leng))
 		return -EFAULT;
-	kern_path(&name, 0, path);
+	if(kern_path(&name, 0, path))
+		return -EINVAL;
 	inode = path->dentry->d_inode;
 	
 	if(inode->i_op->get_gps_location)
