@@ -16,19 +16,19 @@ echo 1-1
 rv=$?; if [[ $rv == 0 ]]; then exit; fi
 
 echo 1-2
-./gpsupdate 180 0 -90 0 1
+./gpsupdate 90 0 -180 0 1
 rv=$?; if [[ $rv != 0 ]]; then exit; fi
 
 echo 1-3
-./gpsupdate -180 0 89 999999 0
+./gpsupdate -90 0 179 999999 0
 rv=$?; if [[ $rv != 0 ]]; then exit; fi
 
 echo 1-4
-./gpsupdate 180 1 90 0 0
+./gpsupdate 90 1 180 0 0
 rv=$?; if [[ $rv == 0 ]]; then exit; fi
 
 echo 1-5
-./gpsupdate -180 0 -90 1 0
+./gpsupdate -90 0 -180 1 0
 rv=$?; if [[ $rv == 0 ]]; then exit; fi
 
 echo 1-6
@@ -60,10 +60,10 @@ rv=$?; if [[ $rv == 0 ]]; then exit; fi
 set -e
 
 echo 2-4
-./gpsupdate 180 0 -90 0 3
+./gpsupdate 90 0 -180 0 3
 touch "$ext2"f2
 rv=$(./getfileloc "$ext2"f2)
-if [ "$rv" != "180.0 -90.0 3" ]; then exit; fi
+if [ "$rv" != "90.0 -180.0 3" ]; then exit; fi
 
 ###############################################
 
@@ -103,17 +103,17 @@ set -e
 ###############################################
 
 echo "#4: angle wrapping test"
-./gpsupdate -180 0 90 0 1
+./gpsupdate -90 0 180 0 1
 touch "$ext2"f3
-./gpsupdate 180 0 -90 0 1
+./gpsupdate 90 0 -180 0 1
 ./writefile "$ext2"f3 modified
-./gpsupdate 180 0 -90 0 1
+./gpsupdate 90 0 -180 0 1
 cat "$ext2"f3
 # cat should not change file's gps_location
-./gpsupdate -180 0 90 0 3
+./gpsupdate -90 0 180 0 3
 cat "$ext2"f3
 rv=$(./getfileloc "$ext2"f3)
-if [ "$rv" != "180 0 -90 0 1" ]; then exit; fi
+if [ "$rv" != "90 0 -180 0 1" ]; then exit; fi
 
 ###############################################
 
@@ -122,21 +122,21 @@ if [ "$rv" != "180 0 -90 0 1" ]; then exit; fi
 
 echo "#5: gps movement & accuracy range test"
 echo 5-1
-./gpsupdate 180 0 90 0 10000
+./gpsupdate 90 0 180 0 10000
 ./writefile "$ext2"f3 m1
-./gpsupdate -179 999999 -89 999999 10000
+./gpsupdate -89 999999 -179 999999 10000
 ./writefile "$ext2"f3 m2
-./gpsupdate 179 179 89 89 200000
+./gpsupdate 89 89 179 179 200000
 ./writefile "$ext2"f3 m3
 
 echo 5-2
 # this range should fail
-./gpsupdate 176 0 89 0 1
+./gpsupdate 86 0 179 0 1
 set +e
 ./writefile "$ext2"f3 m3
 rv=$?; if [[ $rv == 0 ]]; then exit; fi
 set -e
-./gpsupdate -178 0 89 0 200000
+./gpsupdate -88 0 179 0 200000
 ./writefile "$ext2"f3 m4
 
 echo 5-3
@@ -151,9 +151,32 @@ set -e
 
 ###############################################
 
-echo "#6: even sudo user can't access"
+echo "#6: get_gps_location access check"
+echo 6-1
 set +e
-./gpsupdate 180 0 90 0 1
+./gpsupdate 0 0 0 0 1
+touch "$ext2"f4
+chmod -r "$ext2"f4
+./getfileloc "$ext2"f4
+rv=$?; if [[ $rv == 0 ]]; then exit; fi
+
+echo 6-2
+chmod +r "$ext2"f4
+./gpsupdate 1 0 -1 0 1
+./getfileloc "$ext2"f4
+rv=$?; if [[ $rv == 0 ]]; then exit; fi
+set -e
+
+echo 6-3
+./gpsupdate 0 0 0 0 1
+chmod -w "$ext2"f4
+./getfileloc "$ext2"f4
+
+###############################################
+
+echo "#7: even sudo user can't access"
+set +e
+./gpsupdate 90 0 180 0 1
 sudo cat "ext2"f1
 rv=$?; if [[ $rv == 0 ]]; then exit; fi
 set -e
@@ -164,7 +187,7 @@ echo "All tests passed!"
 
 # there's an article that 'set -e' option is not reliable.
 # so test it
-./gpsupdate 180 0 90 0 1
+./gpsupdate 90 0 180 0 1
 ./writefile "$ext2"f1 aaaaaa
 cat "ext2"f1
 echo "This statement should not be printed."
