@@ -36,17 +36,20 @@ int do_get_gps_location(const char __user *pathname, struct gps_location __user 
 	struct gps_location *kloc;
 	struct path *path;
 	struct inode *inode;
-	char name;
-	long leng;
+	char *name;
+	long len;
 
 	// get file's gps location
 	// check do_sys_open() in fs/open.c for reference
 
-	if((leng = strnlen_user(pathname, 1000000L)) == 0)
+	if((len = strnlen_user(pathname, 1000000L)) == 0)
 		return -EINVAL;
-	if(strncpy_from_user(&name, pathname, leng))
+
+	name = (char *) kmalloc(sizeof(char) * len, GFP_ATOMIC);
+	
+	if(strncpy_from_user(name, pathname, len))
 		return -EFAULT;
-	if(kern_path(&name, 0, path))
+	if(kern_path(name, 0, path))
 		return -EINVAL;
 	inode = path->dentry->d_inode;
 	
