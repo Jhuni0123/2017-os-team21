@@ -8,6 +8,8 @@
 
 struct gps_location device_loc;
 
+DEFINE_SPINLOCK(gps_lock);
+
 int do_set_gps_location(struct gps_location __user *loc)
 {
 	struct gps_location kloc;
@@ -23,7 +25,9 @@ int do_set_gps_location(struct gps_location __user *loc)
 		return -EINVAL;
 	if(kloc.accuracy < 0)
 		return -EINVAL;
+	spin_lock(&gps_lock);
 	memcpy(&device_loc, &kloc, sizeof(struct gps_location));
+	spin_unlock(&gps_lock);
 	return 0;
 }
 
