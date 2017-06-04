@@ -23,6 +23,10 @@ int do_set_gps_location(struct gps_location __user *loc)
 		return -EINVAL;
 	if(kloc.lng_fractional < 0 || kloc.lng_fractional > 999999)
 		return -EINVAL;
+	if(abs(kloc.lat_integer) == 90 && kloc.lat_fractional != 0)
+		return -EINVAL;
+	if(abs(kloc.lng_integer) == 180 && kloc.lng_fractional != 0)
+		return -EINVAL;
 	if(kloc.accuracy < 0)
 		return -EINVAL;
 	spin_lock(&gps_lock);
