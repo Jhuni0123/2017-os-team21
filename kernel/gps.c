@@ -6,6 +6,7 @@
 #include <linux/string.h>
 #include <linux/errno.h>
 #include <linux/namei.h>
+#include <linux/fs.h>
 
 struct gps_location device_loc;
 
@@ -69,7 +70,12 @@ int do_get_gps_location(const char __user *pathname, struct gps_location __user 
 
 	kfree(name);
 	inode = path.dentry->d_inode;
-	
+
+	/* access permission check: read permission */
+	if(inode_permission(inode, MAY_READ))
+		return -EACCES;
+
+	/* if passed, get gps location */
 	if(inode->i_op->get_gps_location)
 		inode->i_op->get_gps_location(inode, &kloc);
 	else 
