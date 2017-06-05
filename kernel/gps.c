@@ -23,7 +23,7 @@ int gps_sin(int theta)
 	tmp1 = tmp1 * theta;
 	int tmp2 = 15278874;
 	do_div(tmp1, tmp2);
-	tmp2 = 100000;
+	tmp2 = 1000;
 	do_div(tmp1, tmp2);
 	return (int)tmp1;
 }
@@ -53,7 +53,7 @@ bool is_same_location(struct gps_location *loc1, struct gps_location *loc2)
 	int sin = gps_sin((90000000 - lat_avg) / 90);
 
 	long long tmp1 = (long long)lng_d * sin;
-	long long tmp2 = 100000000LL;
+	int tmp2 = 100000000;
 	do_div(tmp1, tmp2);
 	int lng_p = (int)tmp1;
 
@@ -61,7 +61,10 @@ bool is_same_location(struct gps_location *loc1, struct gps_location *loc2)
 	long long lng_l = (long long)lng_p;
 
 	long long dist_sq = lat_l*lat_l + lng_l*lng_l;
-	int acc_sum = loc1->accuracy + loc2->accuracy;
+	long long acc_sum = (loc1->accuracy + loc2->accuracy) * 899322LL;
+	int divisor = 100000;
+	do_div(acc_sum, divisor);
+
 	long long acc_sq = (long long)acc_sum*acc_sum;
 
 	return dist_sq <= acc_sq;
