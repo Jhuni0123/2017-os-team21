@@ -12,25 +12,62 @@ struct gps_location device_loc;
 
 DEFINE_SPINLOCK(gps_lock);
 
+/* 
+ * input value is (0~1000000) : (0~pi/2)
+ * return value is 10^8 * sin
+ */
+
+int gps_sin(int theta)
+{
+	long long tmp1 = 2400000000000LL - (long long)theta*theta;
+	tmp1 = tmp1 * theta;
+	int tmp2 = 15278874;
+	do_div(tmp1, tmp2);
+	tmp2 = 100000;
+	do_div(tmp1, tmp2);
+	return (int)tmp1;
+}
+
 bool is_same_location(struct gps_location *loc1, struct gps_location *loc2)
 {
-	long long lat1 = loc1->lat_integer*1000000LL + loc1->lat_fractional;
-	long long lng1 = loc1->lng_integer*1000000LL + loc1->lng_fractional;
+	int lat1 = loc1->lat_integer*1000000 + loc1->lat_fractional;
+	int lng1 = loc1->lng_integer*1000000 + loc1->lng_fractional;
+	int lat2 = loc2->lat_integer*1000000 + loc2->lat_fractional;
+	int lng2 = loc2->lng_integer*1000000 + loc2->lng_fractional;
 
-	long long lat2 = loc2->lat_integer*1000000LL + loc2->lat_fractional;
-	long long lng2 = loc2->lng_integer*1000000LL + loc2->lng_fractional;
+	if (lat1 == lat2 && lng1 == lng2)
+		return true;
 
-	long long lat = lat1 - lat2;
-	long long lng = min(abs(lng1 - lng2), 180 - abs(lng1 - lng2));
+	int lat_d = max(lat1, lat2) - min(lat1, lat2);
+	int lng_d = max(lng1, lng2) - min(lng1, lng2);
+	lng_d = min(lng_d, 360000000 - lng_d);
+	
+	int lat_avg;
+	if (lat1 * lat2 < 0) {
+		lat_avg = (abs(lat1) + abs(lat2)) / 3;
+	}
+	else {
+		lat_avg = abs((lat1 + lat2) / 2);
+	}
 
-	long long distance_square = lat*lat + lng*lng;
-	unsigned long long accuracy = (loc1->accuracy + loc2->accuracy) * 895247ULL;
-	unsigned long divisor = 100000U;
-	do_div(accuracy, divisor);
-	unsigned long long accuracy_square = accuracy * accuracy;
+	int sin = gps_sin((90000000 - lat_avg) / 90);
 
-	return (distance_square <= accuracy_square);
+	long long tmp1 = (long long)lng_d * sin;
+	long long tmp2 = 100000000LL;
+	do_div(tmp1, tmp2);
+	int lng_p = (int)tmp1;
+
+	long long lat_l = (long long)lat_d;
+	long long lng_l = (long long)lng_p;
+
+	long long dist_sq = lat_l*lat_l + lng_l*lng_l;
+	int acc_sum = loc1->accuracy + loc2->accuracy;
+	long long acc_sq = (long long)acc_sum*acc_sum;
+
+	return dist_sq <= acc_sq;
 }
+
+
 
 int do_set_gps_location(struct gps_location __user *loc)
 {
