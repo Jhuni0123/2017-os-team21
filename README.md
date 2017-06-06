@@ -30,7 +30,7 @@ In `fs/ext2/inode.c`:
 - define `ext2_set_gps_location` to update file location with `device_loc` with `gps_lock` locked
 - define `ext2_get_gps_location` to get file location stored in inode
 
-## set gps location when a file is created / modified
+## Set gps location when a file is created / modified
 
 For create, in `fs/ext2/namei.c`, `ext2_create`
 - check if it's ext2 file, and if is, call `set_gps_location` of `inode->i_op`
@@ -59,7 +59,7 @@ define syscall operations:
   - short distances are almost precise
   - for longer distances(longer than about 10^6 meters), if one location is close to south/north pole, the calculated distance can be upto about 2 times longer than the real distance
   
-## test codes
+## Test codes
 
 all test codes are in `/test/`
 
@@ -73,7 +73,7 @@ For our own unit test purpose:
 - getfileloc.c, readfile.c, writefile.c, runtest.sh
 
 
-## proj4.fs structure and file_loc results
+## `proj4.fs` structure and `file_loc` results
 
 proj4
 |- bldg_301
