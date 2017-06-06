@@ -42,11 +42,12 @@ For modify, in `fs/read_write.c`, `vfs_write`
 
 - `struct gps_location` defined
 - `device_loc` and `gps_lock` defined as extern values
+- `is_same_location()` defined as extern function 
 
 # `kernel/gps.c`
-`struct gps_location device_loc`: device's current location (shared source)
+- `struct gps_location device_loc`: device's current location (shared source)
+- `spinlock_t gps_lock`: spin lock for `device_loc`
 
-`spinlock_t gps_lock`: spin lock for `device_loc`
 
 define syscall operations:
 - do_set_gps_location: update `device_loc` with `gps_lock` locked
@@ -71,6 +72,45 @@ For spec fulfillment:
 For our own unit test purpose:
 - build: `make test`
 - getfileloc.c, readfile.c, writefile.c, runtest.sh
+
+
+# proj4.fs structure and file_loc results
+
+proj4
+|- bldg_301
+|- bldg_302
+|- statue_of_liberty
+|- stations
+___|- seoul_natl_univ
+___|- nakseongdae
+___|- mangu
+
+owner:~/proj4> ../file_loc bldg_301
+GPS coordinates: lat: 37.449883, lng: 126.052493, accuracy: 30 m
+Google Maps link: www.google.com/maps/search/37.449883,126.952493
+
+owner:~/proj4> ../file_loc bldg_302
+GPS coordinates: lat: 37.448689, lng: 126.052536, accuracy: 30 m
+Google Maps link: www.google.com/maps/search/37.448689,126.952536
+
+owner:~/proj4> ../file_loc statue_of_liberty
+GPS coordinates: lat: 40.689229, lng: -74.044559, accuracy: 30 m
+Google Maps link: www.google.com/maps/search/40.689229,-74.044559
+
+owner:~/proj4> ../file_loc stations
+No GPS info found
+
+owner:~/proj4> ../file_loc stations/seoul_natl_univ
+GPS coordinates: lat: 37.481218, lng: 126.052734, accuracy: 30 m
+Google Maps link: www.google.com/maps/search/37.481218,126.952734
+
+owner:~/proj4> ../file_loc stations/nakseongdae
+GPS coordinates: lat: 37.477022, lng: 126.063557, accuracy: 40 m
+Google Maps link: www.google.com/maps/search/37.477022,126.963557
+
+owner:~/proj4> ../file_loc stations/mangu
+GPS coordinates: lat: 37.599268, lng: 127.092369, accuracy: 40 m
+Google Maps link: www.google.com/maps/search/37.599268,127.092369
 
 
 TODO: add video link, and others
