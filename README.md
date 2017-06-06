@@ -58,7 +58,11 @@ define syscall operations:
   - approximate the sine function(`int sin(theta)`) with 3rd taylor approximation series
   - short distances are almost precise
   - for longer distances(longer than about 10^6 meters), if one location is close to south/north pole, the calculated distance can be upto about 2 times longer than the real distance
-  
+```
+x = (λ2-λ1) * sin(pi/2 - (φ1+φ2)/2);
+y = (φ2-φ1);
+d = sqrt(x*x + y*y) * R;
+```
 ## Test codes
 
 all test codes are in `/test/`
