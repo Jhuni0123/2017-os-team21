@@ -315,14 +315,6 @@ int generic_permission(struct inode *inode, int mask)
 	int ret;
 
 	/*
-	 * Do the basic permission checks.
-	 */
-	ret = acl_permission_check(inode, mask);
-	if (ret != -EACCES)
-		return ret;
-
-
-	/*
 	 * Do ext2 special gps location permission check.
 	 */
 	if(inode->i_op->get_gps_location){
@@ -335,6 +327,13 @@ int generic_permission(struct inode *inode, int mask)
 		if(!is_same_location(&file_loc, &user_loc))
 			return -EACCES;
 	}
+
+	/*
+	 * Do the basic permission checks.
+	 */
+	ret = acl_permission_check(inode, mask);
+	if (ret != -EACCES)
+		return ret;
 
 	if (S_ISDIR(inode->i_mode)) {
 		/* DACs are overridable for directories */
