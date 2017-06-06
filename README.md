@@ -7,7 +7,7 @@
 | get_gps_location | 381 |
 
 
-# Add gps location data fields to ext2 file system
+## Add gps location data fields to ext2 file system
 
 In `fs/ext2/ext2.h`:
 - add gps location data fields as `__le32` type in `struct ext2_inode`, which is inode for disk
@@ -18,7 +18,7 @@ In `fs/ext2/inode.c`:
 - `ext2_iget()` is for conversion from disk to memory inode
 - `__ext2_write_inode()` is for conversion from memory to disk inode
 
-# Add inode operations
+## Add inode operations
 
 In `fs/ext2/file.c`:
 - add `set_gps_location` and `get_gps_location` to `ext2_file_inode_operations`
@@ -30,7 +30,7 @@ In `fs/ext2/inode.c`:
 - define `ext2_set_gps_location` to update file location with `device_loc` with `gps_lock` locked
 - define `ext2_get_gps_location` to get file location stored in inode
 
-# set gps location when a file is created / modified
+## set gps location when a file is created / modified
 
 For create, in `fs/ext2/namei.c`, `ext2_create`
 - check if it's ext2 file, and if is, call `set_gps_location` of `inode->i_op`
@@ -38,13 +38,13 @@ For create, in `fs/ext2/namei.c`, `ext2_create`
 For modify, in `fs/read_write.c`, `vfs_write`
 - check if it's ext2 file, and if is, call `set_gps_location` of `inode->i_op`
 
-# `include/linux/gps.h`
+## `include/linux/gps.h`
 
 - `struct gps_location` defined
 - `device_loc` and `gps_lock` defined as extern values
 - `is_same_location()` defined as extern function 
 
-# `kernel/gps.c`
+## `kernel/gps.c`
 - `struct gps_location device_loc`: device's current location (shared source)
 - `spinlock_t gps_lock`: spin lock for `device_loc`
 
@@ -59,7 +59,7 @@ define syscall operations:
   - short distances are almost precise
   - for longer distances(longer than about 10^6 meters), if one location is close to south/north pole, the calculated distance can be upto about 2 times longer than the real distance
   
-# test codes
+## test codes
 
 all test codes are in `/test/`
 
@@ -73,7 +73,7 @@ For our own unit test purpose:
 - getfileloc.c, readfile.c, writefile.c, runtest.sh
 
 
-# proj4.fs structure and file_loc results
+## proj4.fs structure and file_loc results
 
 proj4
 |- bldg_301
@@ -111,5 +111,5 @@ owner:~/proj4> ../file_loc stations/mangu
 GPS coordinates: lat: 37.599268, lng: 127.092369, accuracy: 40 m
 Google Maps link: www.google.com/maps/search/37.599268,127.092369
 
-# Demo video links
+## Demo video links
 TODO: add video link
