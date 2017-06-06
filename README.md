@@ -48,17 +48,16 @@ For modify, in `fs/read_write.c`, `vfs_write`
 - `struct gps_location device_loc`: device's current location (shared source)
 - `spinlock_t gps_lock`: spin lock for `device_loc`
 
-
 define syscall operations:
 - do_set_gps_location: update `device_loc` with `gps_lock` locked
 - do_get_gps_location: return file's gps_location if user has read permission to it. get file path from pathname with `kern_path`, and check read permission with `inode_permission`
 
-`bool is_same_location(loc1, loc2)`: determine whether two gps locations are in same locaion
+`bool is_same_location(loc1, loc2)`: determine whether two gps locations are in same location
 - calculate the distance of two gps location
   - use the Pythagorean theorem
   - approximate the sine function(`int sin(theta)`) with 3rd taylor approximation series
   - short distances are almost precise
-  - from mideum distances, if one location is close to south/north pole, the error increases upto about 2 times
+  - for longer distances(longer than about 10^6 meters), if one location is close to south/north pole, the calculated distance can be upto about 2 times longer than the real distance
   
 # test codes
 
@@ -112,5 +111,5 @@ owner:~/proj4> ../file_loc stations/mangu
 GPS coordinates: lat: 37.599268, lng: 127.092369, accuracy: 40 m
 Google Maps link: www.google.com/maps/search/37.599268,127.092369
 
-
-TODO: add video link, and others
+# Demo video links
+TODO: add video link
