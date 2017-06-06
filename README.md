@@ -63,6 +63,8 @@ x = (λ2-λ1) * sin(pi/2 - (φ1+φ2)/2);
 y = (φ2-φ1);
 d = sqrt(x*x + y*y) * R;
 ```
+where x is longitude, y is latitude and 
+
 ## Test codes
 
 all test codes are in `/test/`
@@ -116,4 +118,5 @@ GPS coordinates: lat: 37.599268, lng: 127.092369, accuracy: 40 m
 Google Maps link: www.google.com/maps/search/37.599268,127.092369
 
 ## Demo video links
-TODO: add video link
+- [file_demo.mp4](https://drive.google.com/open?id=0B6swelh01RYUcEJ3RjdtdmppU2s) tests proj4.fs files with file_loc and gpsupdate
+- [testing.mp4](https://drive.google.com/open?id=0B6swelh01RYUYnZDa2hweDJZN28) runs our unit tests
