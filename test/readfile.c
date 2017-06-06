@@ -12,6 +12,8 @@ int main(int argc, char** argv)
 	char c;
 	FILE* f = fopen(argv[1], "r");
 	FILE* f2 = fopen("out", "w");
+	if(f == NULL)
+		return 1;
 	fprintf(f2, "1");
 	fscanf(f, "%c", &c);
 	
@@ -23,6 +25,7 @@ int main(int argc, char** argv)
 
 	fprintf(f2, "3");
 	fclose(f);
+	fclose(f2);
 	return 0;
 }
 

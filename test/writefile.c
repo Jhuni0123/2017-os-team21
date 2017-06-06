@@ -11,6 +11,8 @@ int main(int argc, char** argv)
 	}
 	
 	FILE* f = fopen(argv[1], "w");
+	if(f == NULL)
+		return 1;
 	if(argc >= 4) {
 		int t = atoi(argv[3]);
 		sleep(t);
