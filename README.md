@@ -56,8 +56,8 @@ define syscall operations:
 - calculate the distance of two gps location
   - use the Pythagorean theorem
   - approximate the sine function(`int sin(theta)`) with 3rd taylor approximation series
-  - short distances are almost precise 
-  - from mideum distances, if one location is close to south/north pole, the error increases upto about 2 times
+  - short distances are almost precise
+  - from mideum distances, if one location is close to south/north pole, the error increases upto about 2 times
   
 # test codes
 
